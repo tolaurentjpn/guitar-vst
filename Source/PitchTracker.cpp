@@ -18,7 +18,27 @@ void PitchTracker::reset()
     smoothedFrequency = 0.0f;
     lastConfidence = 0.0f;
     voiced = false;
-    unvoicedHoldCounter = 0;
+}
+
+float PitchTracker::getMinConfidenceThreshold() const noexcept
+{
+    return juce::jmap (confidenceThreshold, 0.1f, 0.99f, 0.10f, 0.35f);
+}
+
+void PitchTracker::clearVoicing() noexcept
+{
+    voiced = false;
+    smoothedFrequency = 0.0f;
+    lastConfidence = 0.0f;
+    hangoffHopsRemaining = 0;
+}
+
+void PitchTracker::flush() noexcept
+{
+    std::fill (ringBuffer.begin(), ringBuffer.end(), 0.0f);
+    writeIndex = 0;
+    samplesSinceHop = 0;
+    clearVoicing();
 }
 
 void PitchTracker::setWindowSize (int newWindowSize)
@@ -71,6 +91,139 @@ void PitchTracker::pushSample (float sample)
         samplesSinceHop = 0;
         runAnalysis();
     }
+}
+
+int PitchTracker::findLocalMinimumTau (int centreTau, int minTau, int maxTau) const
+{
+    centreTau = juce::jlimit (minTau, maxTau, centreTau);
+    int localMinTau = centreTau;
+
+    for (int tau = juce::jmax (minTau, centreTau - 3); tau <= juce::jmin (maxTau, centreTau + 3); ++tau)
+    {
+        if (tau > 0 && tau < static_cast<int> (yinBuffer.size()) - 1
+            && yinBuffer[static_cast<size_t> (tau)] <= yinBuffer[static_cast<size_t> (localMinTau)]
+            && yinBuffer[static_cast<size_t> (tau)] <= yinBuffer[static_cast<size_t> (tau - 1)]
+            && yinBuffer[static_cast<size_t> (tau)] <= yinBuffer[static_cast<size_t> (tau + 1)])
+        {
+            localMinTau = tau;
+        }
+    }
+
+    return localMinTau;
+}
+
+float PitchTracker::scoreHarmonicClarity (int tau, int minTau, int maxTau) const
+{
+    if (tau < minTau || tau > maxTau)
+        return 0.0f;
+
+    const int fundTau = findLocalMinimumTau (tau, minTau, maxTau);
+    const float fundYin = yinBuffer[static_cast<size_t> (fundTau)];
+
+    // A true fundamental should not have a much clearer dip at half its period.
+    if (fundTau / 2 >= minTau)
+    {
+        const int halfTau = findLocalMinimumTau (fundTau / 2, minTau, maxTau);
+        const float halfYin = yinBuffer[static_cast<size_t> (halfTau)];
+
+        if (halfYin < fundYin * 0.88f)
+            return 0.0f;
+    }
+
+    // Likewise reject if double-period is a much clearer minimum (2nd-harmonic lock).
+    if (fundTau * 2 <= maxTau)
+    {
+        const int doubleTau = findLocalMinimumTau (fundTau * 2, minTau, maxTau);
+        const float doubleYin = yinBuffer[static_cast<size_t> (doubleTau)];
+
+        if (doubleYin < fundYin * 0.88f)
+            return 0.0f;
+    }
+
+    float score = 1.0f - juce::jlimit (0.0f, 0.99f, fundYin);
+
+    for (int harmonic = 2; harmonic <= 5; ++harmonic)
+    {
+        const int harmonicTau = fundTau / harmonic;
+        if (harmonicTau < minTau)
+            break;
+
+        const int localTau = findLocalMinimumTau (harmonicTau, minTau, maxTau);
+        const float yin = yinBuffer[static_cast<size_t> (localTau)];
+        score *= (1.0f - juce::jlimit (0.0f, 0.99f, yin));
+    }
+
+    return score;
+}
+
+int PitchTracker::correctOctaveTau (int tau, float yinThreshold, int minTau, int maxTau) const
+{
+    const int initialTau = findLocalMinimumTau (tau, minTau, maxTau);
+
+    int seeds[2] { initialTau, initialTau };
+    int numSeeds = 1;
+
+    float globalMinYin = 1.0f;
+    int globalMinTau = initialTau;
+    for (int t = minTau; t <= maxTau; ++t)
+    {
+        if (yinBuffer[static_cast<size_t> (t)] < yinThreshold
+            && yinBuffer[static_cast<size_t> (t)] <= yinBuffer[static_cast<size_t> (t - 1)]
+            && yinBuffer[static_cast<size_t> (t)] <= yinBuffer[static_cast<size_t> (t + 1)]
+            && yinBuffer[static_cast<size_t> (t)] < globalMinYin)
+        {
+            globalMinYin = yinBuffer[static_cast<size_t> (t)];
+            globalMinTau = t;
+        }
+    }
+
+    if (globalMinTau != initialTau)
+        seeds[numSeeds++] = globalMinTau;
+
+    int candidates[16] {};
+    int numCandidates = 0;
+
+    for (int s = 0; s < numSeeds; ++s)
+    {
+        const int seedTau = findLocalMinimumTau (seeds[s], minTau, maxTau);
+        candidates[numCandidates++] = seedTau;
+
+        for (int factor = 2; factor <= 8; factor *= 2)
+        {
+            if (seedTau / factor >= minTau)
+                candidates[numCandidates++] = findLocalMinimumTau (seedTau / factor, minTau, maxTau);
+
+            if (seedTau * factor <= maxTau)
+                candidates[numCandidates++] = findLocalMinimumTau (seedTau * factor, minTau, maxTau);
+        }
+    }
+
+    float bestScore = -1.0f;
+    int resolvedTau = initialTau;
+
+    for (int i = 0; i < numCandidates; ++i)
+    {
+        const int candidateTau = candidates[i];
+        const float candidateYin = yinBuffer[static_cast<size_t> (candidateTau)];
+
+        if (candidateYin >= yinThreshold)
+            continue;
+
+        const float score = scoreHarmonicClarity (candidateTau, minTau, maxTau);
+
+        if (score > bestScore * 1.04f)
+        {
+            bestScore = score;
+            resolvedTau = candidateTau;
+        }
+        else if (score >= bestScore * 0.94f && candidateTau < resolvedTau)
+        {
+            bestScore = juce::jmax (bestScore, score);
+            resolvedTau = candidateTau;
+        }
+    }
+
+    return resolvedTau;
 }
 
 float PitchTracker::computeYinPitch (const float* data, int numSamples, float& outConfidence)
@@ -133,6 +286,8 @@ float PitchTracker::computeYinPitch (const float* data, int numSamples, float& o
         return 0.0f;
     }
 
+    bestTau = correctOctaveTau (bestTau, yinThreshold, minTau, maxTau);
+
     float betterTau = static_cast<float> (bestTau);
     if (bestTau > 0 && bestTau < maxTau)
     {
@@ -162,34 +317,96 @@ void PitchTracker::runAnalysis()
     }
 
     float confidence = 0.0f;
-    const float detected = computeYinPitch (analysisBuffer.data(), windowSize, confidence);
+    float detected = computeYinPitch (analysisBuffer.data(), windowSize, confidence);
+    const float previousConfidence = lastConfidence;
     lastConfidence = confidence;
 
-    const float minConfidence = juce::jmap (confidenceThreshold, 0.1f, 0.99f, 0.12f, 0.45f);
-    const bool detectedVoiced = detected >= minFrequency
-                             && detected <= maxFrequency
-                             && confidence >= minConfidence;
+    if (detected > 0.0f)
+    {
+        while (detected < minFrequency && detected > 0.0f)
+            detected *= 2.0f;
+
+        while (detected > maxFrequency)
+            detected *= 0.5f;
+
+        if (smoothedFrequency > minFrequency * 0.5f)
+        {
+            const float ratio = detected / smoothedFrequency;
+
+            // Correct octave-low relative to recent pitch (detected is half the target).
+            if (ratio > 0.42f && ratio < 0.58f)
+                detected *= 2.0f;
+        }
+    }
+
+    const float minConfidence = getMinConfidenceThreshold();
+    bool detectedVoiced = detected >= minFrequency
+                       && detected <= maxFrequency
+                       && confidence >= minConfidence;
+
+    if (detectedVoiced && smoothedFrequency > minFrequency * 0.5f)
+    {
+        const float ratio = detected / smoothedFrequency;
+        const float semitones = std::abs (12.0f * std::log2 (juce::jmax (ratio, 1.0e-6f)));
+
+        // Reject low-confidence pitch jumps (common when lifting a finger or when
+        // sympathetic open strings bleed into the signal). Always allow octave
+        // corrections upward (e.g. A2 bleed -> A3 played).
+        const bool isOctaveUpCorrection = ratio > 1.75f && ratio < 2.25f;
+        if (semitones > 2.0f && confidence < 0.55f && ! isOctaveUpCorrection)
+        {
+            detected = smoothedFrequency;
+            confidence = juce::jmax (previousConfidence * 0.92f, minConfidence);
+            lastConfidence = confidence;
+        }
+    }
+
+    detectedVoiced = detected >= minFrequency
+                  && detected <= maxFrequency
+                  && confidence >= minConfidence;
 
     if (detectedVoiced)
     {
-        unvoicedHoldCounter = hopSize * 2;
         voiced = true;
+        hangoffHopsRemaining = maxHangoffHops;
 
         if (smoothedFrequency <= 0.0f)
             smoothedFrequency = detected;
         else
-            smoothedFrequency = smoothing * smoothedFrequency + (1.0f - smoothing) * detected;
+        {
+            const float ratio = detected / smoothedFrequency;
+            const float semitones = std::abs (12.0f * std::log2 (juce::jmax (ratio, 1.0e-6f)));
+            const bool isOctaveUpCorrection = ratio > 1.75f && ratio < 2.25f;
+
+            if (isOctaveUpCorrection)
+            {
+                // Snap quickly when correcting a prior octave-low lock.
+                smoothedFrequency = smoothing * 0.15f * smoothedFrequency
+                                  + (1.0f - smoothing * 0.15f) * detected;
+            }
+            else
+            {
+                const float adaptiveSmoothing = semitones > 1.0f ? smoothing * 0.25f
+                                                 : semitones > 0.25f ? smoothing * 0.55f
+                                                 : smoothing;
+                smoothedFrequency = adaptiveSmoothing * smoothedFrequency
+                                  + (1.0f - adaptiveSmoothing) * detected;
+            }
+        }
     }
-    else if (unvoicedHoldCounter > 0)
+    else if (voiced && hangoffHopsRemaining > 0)
     {
-        unvoicedHoldCounter -= hopSize;
-        voiced = true;
+        --hangoffHopsRemaining;
+        lastConfidence *= 0.88f;
+        voiced = lastConfidence >= minConfidence * 0.55f;
+
+        if (! voiced)
+            smoothedFrequency = 0.0f;
     }
     else
     {
         voiced = false;
-        smoothedFrequency *= 0.95f;
-        if (smoothedFrequency < minFrequency * 0.5f)
-            smoothedFrequency = 0.0f;
+        smoothedFrequency = 0.0f;
+        hangoffHopsRemaining = 0;
     }
 }

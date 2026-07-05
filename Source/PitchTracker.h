@@ -6,9 +6,9 @@
 class PitchTracker
 {
 public:
-    static constexpr int defaultWindowSize = 512;
-    static constexpr int defaultHopSize = 128;
-    static constexpr float defaultMinFrequency = 80.0f;
+    static constexpr int defaultWindowSize = 2048;
+    static constexpr int defaultHopSize = 64;
+    static constexpr float defaultMinFrequency = 70.0f;
     static constexpr float defaultMaxFrequency = 1200.0f;
 
     void prepare (double sampleRate);
@@ -30,9 +30,15 @@ public:
     float getFrequency() const noexcept { return smoothedFrequency; }
     float getConfidence() const noexcept { return lastConfidence; }
     bool isVoiced() const noexcept { return voiced; }
+    float getMinConfidenceThreshold() const noexcept;
+    void clearVoicing() noexcept;
+    void flush() noexcept;
 
 private:
     float computeYinPitch (const float* data, int numSamples, float& outConfidence);
+    int findLocalMinimumTau (int centreTau, int minTau, int maxTau) const;
+    float scoreHarmonicClarity (int tau, int minTau, int maxTau) const;
+    int correctOctaveTau (int tau, float yinThreshold, int minTau, int maxTau) const;
     void runAnalysis();
 
     double sampleRate = 44100.0;
@@ -50,7 +56,9 @@ private:
     float smoothedFrequency = 0.0f;
     float lastConfidence = 0.0f;
     bool voiced = false;
-    int unvoicedHoldCounter = 0;
+    int hangoffHopsRemaining = 0;
+
+    static constexpr int maxHangoffHops = 10;
 
     std::vector<float> yinBuffer;
     std::vector<float> analysisBuffer;
