@@ -18,7 +18,7 @@ Typical end-to-end latency at 48 kHz with a 128-sample buffer:
 | Stage | Approx. |
 |-------|---------|
 | Input buffer | ~2.7 ms |
-| Pitch analysis (512-sample window) | ~5–10 ms |
+| Pitch analysis (2048-sample window) | ~15–20 ms |
 | Output buffer | ~2.7 ms |
 | **Total** | **~10–15 ms** |
 
@@ -31,7 +31,7 @@ Typical end-to-end latency at 48 kHz with a 128-sample buffer:
 4. Use **headphones** when monitoring through speakers to avoid feedback (Standalone enables live input by default).
 5. Disable direct monitoring on your audio interface if you hear a dry double.
 6. Use a relatively clean guitar signal; heavy distortion makes tracking harder.
-7. Adjust **Gate** and **Tracking** knobs if notes fail to trigger or flicker.
+7. Adjust **Gate** (default -48 dB) and **Tracking** knobs if notes fail to trigger, or if you hear synth output while idle. Raise Gate toward -40 dB if the gate opens on interface noise.
 
 Run the automated checks after building:
 
