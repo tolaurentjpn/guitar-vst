@@ -101,6 +101,29 @@ target_link_libraries(GuitarSynthProcessorTests PRIVATE
 add_dependencies(GuitarSynthProcessorTests GuitarSynth)
 add_test(NAME GuitarSynthProcessorTests COMMAND GuitarSynthProcessorTests)
 
+add_executable(GuitarSynthPitchTrackerTests Tests/PitchTrackerTests.cpp)
+target_include_directories(GuitarSynthPitchTrackerTests PRIVATE
+    Source
+    "${CMAKE_CURRENT_BINARY_DIR}/GuitarSynth_artefacts/JuceLibraryCode"
+    "${CMAKE_BINARY_DIR}/_deps/juce-src/modules")
+target_compile_definitions(GuitarSynthPitchTrackerTests PRIVATE
+    JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1
+    JUCE_MODULE_AVAILABLE_juce_core=1
+    JUCE_MODULE_AVAILABLE_juce_dsp=1
+    JUCE_SHARED_CODE=1
+    JUCE_STANDALONE_APPLICATION=0
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(GuitarSynthPitchTrackerTests PRIVATE
+    GuitarSynth
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+add_dependencies(GuitarSynthPitchTrackerTests GuitarSynth)
+add_test(NAME GuitarSynthPitchTrackerTests COMMAND GuitarSynthPitchTrackerTests)
+
 target_link_libraries(GuitarSynthTests PRIVATE)
 
 add_test(NAME GuitarSynthTests COMMAND GuitarSynthTests)

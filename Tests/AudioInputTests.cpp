@@ -63,7 +63,7 @@ int main()
 
     {
         expectTrue ("Default gate threshold accepts instrument-level signal",
-                    0.05f >= dbToLinear (-58.0f));
+                    0.05f >= dbToLinear (-72.0f));
     }
 
     std::cout << testsRun << " tests run, " << testsFailed << " failed\n";
