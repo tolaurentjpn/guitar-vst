@@ -4,12 +4,16 @@
 void EnvelopeFollower::prepare (double newSampleRate)
 {
     sampleRate = newSampleRate;
+    peakDecayCoeff = msToCoeff (15.0f, sampleRate);
     reset();
 }
 
 void EnvelopeFollower::reset()
 {
     envelope = 0.0f;
+    peakHold = 0.0f;
+    gateOpen = false;
+    gateOutput = 0.0f;
 }
 
 void EnvelopeFollower::setAttackMs (float attackMs)
@@ -30,13 +34,38 @@ void EnvelopeFollower::setGateThreshold (float thresholdDb)
 float EnvelopeFollower::processSample (float input) noexcept
 {
     const float rectified = std::abs (input);
+    peakHold = juce::jmax (rectified, peakHold * peakDecayCoeff);
+
     const float coeff = rectified > envelope ? attackCoeff : releaseCoeff;
     envelope = rectified + coeff * (envelope - rectified);
 
-    if (envelope < gateThresholdLinear)
-        return 0.0f;
+    const float openThreshold = gateThresholdLinear;
+    const float closeThreshold = gateThresholdLinear * 0.35f;
 
-    return juce::jlimit (0.0f, 1.0f, envelope / gateThresholdLinear);
+    if (! gateOpen)
+    {
+        // Open on transient peaks (picked notes), not slow envelope buildup from noise floor.
+        if (peakHold >= openThreshold)
+            gateOpen = true;
+    }
+    else if (envelope < closeThreshold
+             || (peakHold < openThreshold * 0.6f && envelope < openThreshold * 0.45f))
+    {
+        gateOpen = false;
+        peakHold = 0.0f;
+    }
+
+    const float target = gateOpen ? 1.0f : 0.0f;
+    const float gateCloseCoeff = msToCoeff (20.0f, sampleRate);
+    const float slewCoeff = gateOpen ? attackCoeff : gateCloseCoeff;
+    gateOutput = target + slewCoeff * (gateOutput - target);
+
+    return gateOutput;
+}
+
+float EnvelopeFollower::getEnvelopeDb() const noexcept
+{
+    return envelope > 1.0e-8f ? 20.0f * std::log10 (envelope) : -100.0f;
 }
 
 float EnvelopeFollower::dbToLinear (float db)
