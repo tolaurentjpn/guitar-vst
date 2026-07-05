@@ -1,0 +1,80 @@
+#pragma once
+
+#include <JuceHeader.h>
+#include "PitchTracker.h"
+#include "EnvelopeFollower.h"
+#include "SynthEngine.h"
+
+class GuitarSynthAudioProcessor : public juce::AudioProcessor
+{
+public:
+    GuitarSynthAudioProcessor();
+    ~GuitarSynthAudioProcessor() override;
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override;
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    juce::AudioProcessorValueTreeState& getApvts() { return apvts; }
+
+    float getDisplayedFrequency() const noexcept { return displayedFrequency.load(); }
+    float getDisplayedConfidence() const noexcept { return displayedConfidence.load(); }
+    bool getDisplayedVoiced() const noexcept { return displayedVoiced.load(); }
+    double getDisplayedLatencyMs() const noexcept { return displayedLatencyMs.load(); }
+
+    float getDisplayedInputPeak() const noexcept { return displayedInputPeak.load(); }
+    int getConfiguredInputChannels() const noexcept { return getTotalNumInputChannels(); }
+
+    static juce::String getParameterId (const char* id) { return juce::String (id); }
+
+    static constexpr const char* paramWaveform = "waveform";
+    static constexpr const char* paramFilterCutoff = "filterCutoff";
+    static constexpr const char* paramFilterResonance = "filterResonance";
+    static constexpr const char* paramAttack = "attack";
+    static constexpr const char* paramDecay = "decay";
+    static constexpr const char* paramSustain = "sustain";
+    static constexpr const char* paramRelease = "release";
+    static constexpr const char* paramGlide = "glide";
+    static constexpr const char* paramMasterGain = "masterGain";
+    static constexpr const char* paramTrackingSensitivity = "trackingSensitivity";
+    static constexpr const char* paramGateThreshold = "gateThreshold";
+
+private:
+    void updateRealtimeParameters();
+
+    juce::AudioProcessorValueTreeState apvts;
+
+    PitchTracker pitchTracker;
+    EnvelopeFollower envelopeFollower;
+    SynthEngine synthEngine;
+
+    juce::dsp::IIR::Filter<float> highPassFilter;
+    juce::dsp::ProcessSpec spec {};
+
+    std::atomic<float> displayedFrequency { 0.0f };
+    std::atomic<float> displayedConfidence { 0.0f };
+    std::atomic<bool> displayedVoiced { false };
+    std::atomic<float> displayedInputPeak { 0.0f };
+    std::atomic<double> displayedLatencyMs { 0.0 };
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarSynthAudioProcessor)
+};
