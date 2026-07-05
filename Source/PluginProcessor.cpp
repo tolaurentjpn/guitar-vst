@@ -75,8 +75,8 @@ namespace
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramGateThreshold,
             "Gate",
-            juce::NormalisableRange<float> (-60.0f, 0.0f, 0.1f),
-            -58.0f,
+            juce::NormalisableRange<float> (-80.0f, 0.0f, 0.1f),
+            -48.0f,
             "dB"));
 
         return { params.begin(), params.end() };
@@ -149,7 +149,7 @@ void GuitarSynthAudioProcessor::updateRealtimeParameters()
     pitchTracker.setSmoothing (0.15f + (1.0f - *apvts.getRawParameterValue (paramTrackingSensitivity)) * 0.6f);
 
     envelopeFollower.setAttackMs (2.0f);
-    envelopeFollower.setReleaseMs (80.0f);
+    envelopeFollower.setReleaseMs (180.0f);
     envelopeFollower.setGateThreshold (*apvts.getRawParameterValue (paramGateThreshold));
 }
 
@@ -188,26 +188,53 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     buffer.clear();
 
-    std::vector<float> gateEnvelope (static_cast<size_t> (numSamples));
-
     auto* left = buffer.getWritePointer (0);
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : left;
+
+    bool trackingActive = false;
+    bool gateWasOpen = false;
 
     for (int i = 0; i < numSamples; ++i)
     {
         const float hpSample = highPassFilter.processSample (inputSamples[static_cast<size_t> (i)]);
-        pitchTracker.pushSample (hpSample);
-        gateEnvelope[static_cast<size_t> (i)] = envelopeFollower.processSample (hpSample);
+        envelopeFollower.processSample (hpSample);
+        const bool gateOpen = envelopeFollower.isGateOpen();
 
-        synthEngine.setPitchState (pitchTracker.getFrequency(), pitchTracker.isVoiced());
-        const float sample = synthEngine.processSample (gateEnvelope[static_cast<size_t> (i)]);
+        if (gateOpen)
+        {
+            pitchTracker.pushSample (hpSample);
+        }
+        else
+        {
+            if (gateWasOpen)
+                pitchTracker.flush();
+            else
+                pitchTracker.clearVoicing();
+
+            synthEngine.muteImmediately();
+            gateWasOpen = gateOpen;
+            left[i] = 0.0f;
+            right[i] = 0.0f;
+            continue;
+        }
+
+        gateWasOpen = gateOpen;
+
+        trackingActive = gateOpen
+                      && pitchTracker.isVoiced()
+                      && pitchTracker.getConfidence() >= pitchTracker.getMinConfidenceThreshold()
+                                 + (1.0f - juce::jlimit (0.0f, 1.0f, envelopeFollower.getEnvelopeLinear() * 8.0f)) * 0.12f;
+        synthEngine.setPitchState (pitchTracker.getFrequency(), trackingActive);
+        const float sample = synthEngine.processSample();
         left[i] = sample;
         right[i] = sample;
     }
 
     displayedFrequency.store (pitchTracker.getFrequency());
     displayedConfidence.store (pitchTracker.getConfidence());
-    displayedVoiced.store (pitchTracker.isVoiced());
+    displayedVoiced.store (trackingActive);
+    displayedGateOpen.store (envelopeFollower.isGateOpen());
+    displayedGateEnvelopeDb.store (envelopeFollower.getEnvelopeDb());
     displayedLatencyMs.store (1000.0 * static_cast<double> (getLatencySamples()) / getSampleRate());
 }
 

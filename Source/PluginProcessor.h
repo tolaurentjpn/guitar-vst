@@ -42,6 +42,8 @@ public:
     double getDisplayedLatencyMs() const noexcept { return displayedLatencyMs.load(); }
 
     float getDisplayedInputPeak() const noexcept { return displayedInputPeak.load(); }
+    float getDisplayedGateEnvelopeDb() const noexcept { return displayedGateEnvelopeDb.load(); }
+    bool getDisplayedGateOpen() const noexcept { return displayedGateOpen.load(); }
     int getConfiguredInputChannels() const noexcept { return getTotalNumInputChannels(); }
 
     static juce::String getParameterId (const char* id) { return juce::String (id); }
@@ -74,6 +76,8 @@ private:
     std::atomic<float> displayedConfidence { 0.0f };
     std::atomic<bool> displayedVoiced { false };
     std::atomic<float> displayedInputPeak { 0.0f };
+    std::atomic<float> displayedGateEnvelopeDb { -100.0f };
+    std::atomic<bool> displayedGateOpen { false };
     std::atomic<double> displayedLatencyMs { 0.0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarSynthAudioProcessor)
