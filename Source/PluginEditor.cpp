@@ -61,6 +61,10 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     inputLevelLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (inputLevelLabel);
 
+    gateLevelLabel.setText ("Gate: closed", juce::dontSendNotification);
+    gateLevelLabel.setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (gateLevelLabel);
+
     inputHintLabel.setText ("", juce::dontSendNotification);
     inputHintLabel.setJustificationType (juce::Justification::centredLeft);
     inputHintLabel.setColour (juce::Label::textColourId, juce::Colour (0xffffcc66));
@@ -173,6 +177,7 @@ void GuitarSynthAudioProcessorEditor::resized()
     pitchLabel.setBounds (display.withTrimmedLeft (120).withTrimmedRight (120).removeFromTop (42));
     noteLabel.setBounds (display.withTrimmedLeft (180).withTrimmedRight (180).removeFromTop (72));
     inputLevelLabel.setBounds (display.removeFromLeft (160).removeFromBottom (28));
+    gateLevelLabel.setBounds (display.removeFromRight (160).removeFromBottom (28));
     confidenceLabel.setBounds (display.removeFromBottom (28));
     inputHintLabel.setBounds (bounds.removeFromTop (22));
 
@@ -212,6 +217,8 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
     const float confidence = audioProcessor.getDisplayedConfidence();
     const bool voiced = audioProcessor.getDisplayedVoiced();
     const float inputPeak = audioProcessor.getDisplayedInputPeak();
+    const bool gateOpen = audioProcessor.getDisplayedGateOpen();
+    const float gateEnvelopeDb = audioProcessor.getDisplayedGateEnvelopeDb();
 
     pitchLabel.setText (voiced && frequency > 0.0f
                             ? juce::String (frequency, 1) + " Hz"
@@ -220,6 +227,11 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
     noteLabel.setText (frequencyToNoteName (frequency), juce::dontSendNotification);
     confidenceLabel.setText ("Confidence: " + juce::String (juce::roundToInt (confidence * 100.0f)) + "%",
                              juce::dontSendNotification);
+    gateLevelLabel.setText ("Gate: " + juce::String (gateOpen ? "open" : "closed")
+                            + " (" + juce::String (gateEnvelopeDb, 1) + " dB)",
+                            juce::dontSendNotification);
+    gateLevelLabel.setColour (juce::Label::textColourId,
+                              gateOpen ? juce::Colour (0xff4cd964) : juce::Colours::lightgrey);
 
     if (inputPeak > 1.0e-6f)
     {
@@ -227,7 +239,11 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
         inputLevelLabel.setText ("Input: " + juce::String (inputDb, 1) + " dBFS ("
                                  + juce::String (audioProcessor.getConfiguredInputChannels()) + " ch)",
                                  juce::dontSendNotification);
-        inputHintLabel.setText ("", juce::dontSendNotification);
+        if (gateOpen && ! voiced)
+            inputHintLabel.setText ("Gate is open on input noise — raise the Gate knob (try -40 dB or higher)",
+                                    juce::dontSendNotification);
+        else
+            inputHintLabel.setText ("", juce::dontSendNotification);
     }
     else if (audioProcessor.getConfiguredInputChannels() == 0)
     {

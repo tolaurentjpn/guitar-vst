@@ -27,6 +27,7 @@ private:
     juce::Label noteLabel;
     juce::Label confidenceLabel;
     juce::Label inputLevelLabel;
+    juce::Label gateLevelLabel;
     juce::Label inputHintLabel;
     juce::Label latencyLabel;
     std::unique_ptr<juce::Component> voicedIndicator;
