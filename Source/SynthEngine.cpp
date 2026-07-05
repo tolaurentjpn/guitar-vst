@@ -35,13 +35,9 @@ void SynthEngine::prepare (double newSampleRate, int maximumBlockSize)
 
 void SynthEngine::reset()
 {
-    oscillator.reset();
-    filter.reset();
-    envelope = 0.0f;
-    envStage = EnvStage::idle;
+    hardMute();
     currentFrequency = 440.0f;
     targetFrequency = 440.0f;
-    activeVoiced = false;
 }
 
 void SynthEngine::setWaveform (WaveformType type)
@@ -90,34 +86,66 @@ void SynthEngine::setMasterGain (float gain)
     masterGain = juce::jlimit (0.0f, 1.0f, gain);
 }
 
-void SynthEngine::setPitchState (float hz, bool isVoiced)
+void SynthEngine::hardMute() noexcept
 {
-    if (isVoiced && hz > 0.0f)
+    activeVoiced = false;
+    envelope = 0.0f;
+    envStage = EnvStage::idle;
+    oscillator.reset();
+    filter.reset();
+}
+
+void SynthEngine::muteImmediately() noexcept
+{
+    hardMute();
+}
+
+void SynthEngine::setPitchState (float hz, bool trackingActive)
+{
+    const bool hasPitch = trackingActive && hz > 0.0f;
+
+    if (hasPitch)
     {
+        const bool significantJump = activeVoiced
+                                    && targetFrequency > 0.0f
+                                    && std::abs (std::log2 (hz / targetFrequency)) > (50.0f / 1200.0f);
+
         targetFrequency = hz;
-        if (! activeVoiced)
+
+        if (envStage == EnvStage::idle || envStage == EnvStage::release)
         {
             currentFrequency = hz;
             envStage = EnvStage::attack;
+            oscillator.reset();
+            filter.reset();
+            activeVoiced = true;
         }
+        else if (significantJump && glideCoeff <= 0.0f)
+        {
+            currentFrequency = hz;
+            oscillator.reset();
+        }
+
         activeVoiced = true;
     }
-    else if (activeVoiced)
+    else if (activeVoiced && envStage != EnvStage::release)
     {
-        activeVoiced = false;
         envStage = EnvStage::release;
     }
 }
 
-float SynthEngine::processSample (float gateLevel) noexcept
+float SynthEngine::processSample() noexcept
 {
-    if (glideCoeff <= 0.0f || ! activeVoiced)
+    if (envStage == EnvStage::idle)
+        return 0.0f;
+
+    if (glideCoeff <= 0.0f)
         currentFrequency = targetFrequency;
     else
         currentFrequency += (targetFrequency - currentFrequency) * (1.0f - glideCoeff);
 
     oscillator.setFrequency (currentFrequency, true);
-    return renderSample (gateLevel);
+    return renderSample();
 }
 
 void SynthEngine::processBlock (juce::AudioBuffer<float>& buffer, const float* gateEnvelope, int numSamples)
@@ -127,14 +155,14 @@ void SynthEngine::processBlock (juce::AudioBuffer<float>& buffer, const float* g
 
     for (int i = 0; i < numSamples; ++i)
     {
-        const float gate = gateEnvelope != nullptr ? gateEnvelope[i] : 1.0f;
-        const float sample = processSample (gate);
+        juce::ignoreUnused (gateEnvelope);
+        const float sample = processSample();
         left[i] = sample;
         right[i] = sample;
     }
 }
 
-float SynthEngine::renderSample (float gateLevel) noexcept
+float SynthEngine::renderSample() noexcept
 {
     switch (envStage)
     {
@@ -158,12 +186,9 @@ float SynthEngine::renderSample (float gateLevel) noexcept
             envelope = sustainLevel;
             break;
         case EnvStage::release:
-            envelope *= releaseCoeff;
-            if (envelope < 0.001f)
-            {
-                envelope = 0.0f;
-                envStage = EnvStage::idle;
-            }
+            envelope += (0.0f - envelope) * (1.0f - releaseCoeff);
+            if (envelope <= 0.001f)
+                hardMute();
             break;
         case EnvStage::idle:
         default:
@@ -171,7 +196,7 @@ float SynthEngine::renderSample (float gateLevel) noexcept
             break;
     }
 
-    const float amp = envelope * juce::jlimit (0.0f, 1.0f, gateLevel) * masterGain;
+    const float amp = envelope * masterGain;
     if (amp <= 0.0f)
         return 0.0f;
 

@@ -25,12 +25,14 @@ public:
     void setGlideMs (float ms);
     void setMasterGain (float gain);
 
-    void setPitchState (float hz, bool isVoiced);
-    float processSample (float gateLevel) noexcept;
+    void setPitchState (float hz, bool trackingActive);
+    void muteImmediately() noexcept;
+    float processSample() noexcept;
     void processBlock (juce::AudioBuffer<float>& buffer, const float* gateEnvelope, int numSamples);
 
 private:
-    float renderSample (float gateLevel) noexcept;
+    void hardMute() noexcept;
+    float renderSample() noexcept;
     void updateFilter();
     float msToCoeff (float ms) const;
 
