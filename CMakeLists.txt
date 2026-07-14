@@ -35,6 +35,7 @@ target_sources(GuitarSynth
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PitchTracker.cpp
+        Source/PyinDecoder.cpp
         Source/EnvelopeFollower.cpp
         Source/SynthEngine.cpp
         Source/LookAndFeel.cpp)

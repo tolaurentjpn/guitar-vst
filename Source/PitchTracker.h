@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include <vector>
+#include "PyinDecoder.h"
 
 class PitchTracker
 {
@@ -29,17 +30,17 @@ public:
 
     float getFrequency() const noexcept { return smoothedFrequency; }
     float getConfidence() const noexcept { return lastConfidence; }
+    float getCandidateFrequency() const noexcept { return lastCandidateFrequency; }
+    float getCandidateConfidence() const noexcept { return lastCandidateConfidence; }
     bool isVoiced() const noexcept { return voiced; }
     float getMinConfidenceThreshold() const noexcept;
     void clearVoicing() noexcept;
     void flush() noexcept;
 
 private:
-    float computeYinPitch (const float* data, int numSamples, float& outConfidence);
-    int findLocalMinimumTau (int centreTau, int minTau, int maxTau) const;
-    float scoreHarmonicClarity (int tau, int minTau, int maxTau) const;
-    int correctOctaveTau (int tau, float yinThreshold, int minTau, int maxTau) const;
     void runAnalysis();
+
+    PyinDecoder pyinDecoder;
 
     double sampleRate = 44100.0;
     int windowSize = defaultWindowSize;
@@ -55,11 +56,12 @@ private:
 
     float smoothedFrequency = 0.0f;
     float lastConfidence = 0.0f;
+    float lastCandidateFrequency = 0.0f;
+    float lastCandidateConfidence = 0.0f;
     bool voiced = false;
     int hangoffHopsRemaining = 0;
 
     static constexpr int maxHangoffHops = 10;
 
-    std::vector<float> yinBuffer;
     std::vector<float> analysisBuffer;
 };

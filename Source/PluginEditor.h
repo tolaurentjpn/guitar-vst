@@ -4,6 +4,10 @@
 #include "PluginProcessor.h"
 #include "LookAndFeel.h"
 
+#if JucePlugin_Build_Standalone
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
+
 class GuitarSynthAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         private juce::Timer
 {
@@ -31,6 +35,13 @@ private:
     juce::Label inputHintLabel;
     juce::Label latencyLabel;
     std::unique_ptr<juce::Component> voicedIndicator;
+
+   #if JucePlugin_Build_Standalone
+    juce::TextButton outputTestButton { "Test Output" };
+    juce::Label outputDeviceLabel;
+   #else
+    juce::TextButton outputTestButton { "Test Output" };
+   #endif
 
     juce::ComboBox waveformBox;
     juce::Label waveformLabel;

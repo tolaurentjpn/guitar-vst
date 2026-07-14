@@ -4,6 +4,13 @@
 
 namespace
 {
+    void writeSampleToAllChannels (juce::AudioBuffer<float>& buffer, int sampleIndex, float sample) noexcept
+    {
+        const int numChannels = buffer.getNumChannels();
+        for (int ch = 0; ch < numChannels; ++ch)
+            buffer.setSample (ch, sampleIndex, sample);
+    }
+
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -70,7 +77,7 @@ namespace
             GuitarSynthAudioProcessor::paramTrackingSensitivity,
             "Tracking",
             juce::NormalisableRange<float> (0.1f, 0.99f, 0.001f),
-            0.55f));
+            0.35f));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramGateThreshold,
@@ -83,9 +90,54 @@ namespace
     }
 }
 
+void GuitarSynthAudioProcessor::requestOutputTestTone (double seconds) noexcept
+{
+    const double sr = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const double totalSeconds = juce::jmax (0.4, seconds);
+    const int64_t totalSamples = static_cast<int64_t> (totalSeconds * sr);
+    // First half: raw sine. Second half: SynthEngine (verifies filter/ADSR path).
+    testToneUntilSample = totalSamplesProcessed + totalSamples / 2;
+    testSynthUntilSample = totalSamplesProcessed + totalSamples;
+    testTonePhase = 0.0;
+    synthEngine.muteImmediately();
+}
+
+bool GuitarSynthAudioProcessor::isOutputTestToneActive() const noexcept
+{
+    return totalSamplesProcessed < testSynthUntilSample;
+}
+
+bool GuitarSynthAudioProcessor::isForcedSynthTestActive() const noexcept
+{
+    return totalSamplesProcessed >= testToneUntilSample
+        && totalSamplesProcessed < testSynthUntilSample;
+}
+
+juce::String GuitarSynthAudioProcessor::getBusLayoutDescription() const
+{
+    const auto inSet = getBusesLayout().getMainInputChannelSet();
+    const auto outSet = getBusesLayout().getMainOutputChannelSet();
+    const auto describe = [] (const juce::AudioChannelSet& set) -> juce::String
+    {
+        if (set == juce::AudioChannelSet::disabled())
+            return "off";
+        if (set == juce::AudioChannelSet::mono())
+            return "mono";
+        if (set == juce::AudioChannelSet::stereo())
+            return "stereo";
+        return juce::String (set.size()) + "ch";
+    };
+
+    return describe (inSet) + "→" + describe (outSet)
+         + " (" + juce::String (getTotalNumInputChannels()) + "i/"
+         + juce::String (getTotalNumOutputChannels()) + "o)";
+}
+
 GuitarSynthAudioProcessor::GuitarSynthAudioProcessor()
     : AudioProcessor (BusesProperties()
-                          .withInput ("Input", juce::AudioChannelSet::stereo(), true)
+                          // Guitar is mono. Prefer mono-in → stereo-out so CoreAudio maps
+                          // cleanly to Audient Main L/R (headphones), not a 4-ch discrete bus.
+                          .withInput ("Input", juce::AudioChannelSet::mono(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMETERS", createLayout())
 {
@@ -103,8 +155,16 @@ void GuitarSynthAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     envelopeFollower.prepare (sampleRate);
     synthEngine.prepare (sampleRate, samplesPerBlock);
 
-    highPassFilter.prepare (spec);
-    highPassFilter.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass (sampleRate, 80.0);
+    gateHighPassFilter.prepare (spec);
+    gateHighPassFilter.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass (sampleRate, 80.0);
+    inputPreRoll.assign (static_cast<size_t> (pitchTracker.getWindowSize()), 0.0f);
+    preRollWriteIndex = 0;
+    gateWasOpen = false;
+    gateClosedSampleCount = 0;
+    totalSamplesProcessed = 0;
+    testToneUntilSample = 0;
+    testSynthUntilSample = 0;
+    testTonePhase = 0.0;
 
     updateRealtimeParameters();
     setLatencySamples (pitchTracker.getLatencySamples());
@@ -116,20 +176,19 @@ void GuitarSynthAudioProcessor::releaseResources() {}
 bool GuitarSynthAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto& out = layouts.getMainOutputChannelSet();
-    if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo())
+    const bool outOk = out == juce::AudioChannelSet::mono()
+                    || out == juce::AudioChannelSet::stereo()
+                    || out == juce::AudioChannelSet::discreteChannels (4)
+                    || out == juce::AudioChannelSet::quadraphonic();
+    if (! outOk)
         return false;
 
     const auto& in = layouts.getMainInputChannelSet();
     if (in == juce::AudioChannelSet::disabled())
         return true;
 
-    if (in != juce::AudioChannelSet::mono() && in != juce::AudioChannelSet::stereo())
-        return false;
-
-    if (in == juce::AudioChannelSet::mono())
-        return out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo();
-
-    return out == juce::AudioChannelSet::stereo();
+    // Accept mono or stereo input (DI may appear as either depending on device settings).
+    return in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo();
 }
 
 void GuitarSynthAudioProcessor::updateRealtimeParameters()
@@ -161,81 +220,223 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     updateRealtimeParameters();
 
     const int numSamples = buffer.getNumSamples();
+    const int numInputChannels = getTotalNumInputChannels();
+    const int numBufferChannels = buffer.getNumChannels();
+    const bool playTestTone = totalSamplesProcessed < testToneUntilSample;
+    const bool playForcedSynth = ! playTestTone && totalSamplesProcessed < testSynthUntilSample;
+    const double sampleRate = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const double testTonePhaseDelta = juce::MathConstants<double>::twoPi * 440.0 / sampleRate;
 
-    if (getTotalNumInputChannels() == 0)
-    {
-        displayedInputPeak.store (0.0f);
-        buffer.clear();
-        return;
-    }
-
-    std::vector<float> inputSamples (static_cast<size_t> (numSamples));
-    const float* inputCh0 = buffer.getReadPointer (0);
-    const float* inputCh1 = getTotalNumInputChannels() > 1 ? buffer.getReadPointer (1) : nullptr;
-
+    std::vector<float> inputSamples (static_cast<size_t> (numSamples), 0.0f);
     float inputPeak = 0.0f;
-    for (int i = 0; i < numSamples; ++i)
-    {
-        float sample = inputCh0[i];
-        if (inputCh1 != nullptr && std::abs (inputCh1[i]) > std::abs (sample))
-            sample = inputCh1[i];
+    float inputPeakCh0 = 0.0f;
+    float inputPeakCh1 = 0.0f;
 
-        inputSamples[static_cast<size_t> (i)] = sample;
-        inputPeak = juce::jmax (inputPeak, std::abs (sample));
+    // Scan every channel present in the shared IO buffer before we clear it.
+    // With mono→stereo layouts JUCE may still park device DI on channel 0 or 1.
+    if (numInputChannels > 0 && numBufferChannels > 0)
+    {
+        const int channelsToScan = juce::jmin (numBufferChannels,
+                                               juce::jmax (numInputChannels, 2));
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float sample = 0.0f;
+            for (int ch = 0; ch < channelsToScan; ++ch)
+            {
+                const float chSample = buffer.getSample (ch, i);
+                if (ch == 0)
+                    inputPeakCh0 = juce::jmax (inputPeakCh0, std::abs (chSample));
+                else if (ch == 1)
+                    inputPeakCh1 = juce::jmax (inputPeakCh1, std::abs (chSample));
+
+                if (std::abs (chSample) > std::abs (sample))
+                    sample = chSample;
+            }
+
+            inputSamples[static_cast<size_t> (i)] = sample;
+            inputPeak = juce::jmax (inputPeak, std::abs (sample));
+        }
     }
 
     displayedInputPeak.store (inputPeak);
+    displayedInputPeakCh0.store (inputPeakCh0);
+    displayedInputPeakCh1.store (inputPeakCh1);
 
     buffer.clear();
 
-    auto* left = buffer.getWritePointer (0);
-    auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : left;
-
-    bool trackingActive = false;
-    bool gateWasOpen = false;
-
-    for (int i = 0; i < numSamples; ++i)
+    if (numBufferChannels <= 0)
     {
-        const float hpSample = highPassFilter.processSample (inputSamples[static_cast<size_t> (i)]);
-        envelopeFollower.processSample (hpSample);
-        const bool gateOpen = envelopeFollower.isGateOpen();
+        totalSamplesProcessed += numSamples;
+        return;
+    }
 
-        if (gateOpen)
+    totalSamplesProcessed += numSamples;
+
+    // Diagnostic tones bypass gate/pitch so users can verify speakers/headphones.
+    if (playTestTone || playForcedSynth)
+    {
+        float outputPeak = 0.0f;
+        double outputSquareSum = 0.0;
+
+        if (playTestTone)
         {
-            pitchTracker.pushSample (hpSample);
+            synthEngine.muteImmediately();
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                const float sample = 0.35f * static_cast<float> (std::sin (testTonePhase));
+                testTonePhase += testTonePhaseDelta;
+                if (testTonePhase >= juce::MathConstants<double>::twoPi)
+                    testTonePhase -= juce::MathConstants<double>::twoPi;
+
+                writeSampleToAllChannels (buffer, i, sample);
+                outputPeak = juce::jmax (outputPeak, std::abs (sample));
+                outputSquareSum += static_cast<double> (sample) * static_cast<double> (sample);
+            }
+
+            displayedFrequency.store (440.0f);
         }
         else
         {
-            if (gateWasOpen)
-                pitchTracker.flush();
-            else
-                pitchTracker.clearVoicing();
+            // Second half: drive the real SynthEngine so filter/ADSR/Master are verified.
+            for (int i = 0; i < numSamples; ++i)
+            {
+                synthEngine.setPitchState (220.0f, true);
+                const float sample = synthEngine.processSample();
+                writeSampleToAllChannels (buffer, i, sample);
+                outputPeak = juce::jmax (outputPeak, std::abs (sample));
+                outputSquareSum += static_cast<double> (sample) * static_cast<double> (sample);
+            }
 
-            synthEngine.muteImmediately();
-            gateWasOpen = gateOpen;
-            left[i] = 0.0f;
-            right[i] = 0.0f;
+            displayedFrequency.store (220.0f);
+        }
+
+        displayedConfidence.store (1.0f);
+        displayedVoiced.store (true);
+        displayedOutputPeak.store (outputPeak);
+        displayedOutputRms.store (numSamples > 0
+                                      ? static_cast<float> (std::sqrt (outputSquareSum / numSamples))
+                                      : 0.0f);
+        displayedGateOpen.store (envelopeFollower.isGateOpen());
+        displayedGateEnvelopeDb.store (envelopeFollower.getEnvelopeDb());
+        displayedLatencyMs.store (1000.0 * static_cast<double> (getLatencySamples()) / sampleRate);
+        return;
+    }
+
+    constexpr int gateCloseClearSamples = 3840; // ~80 ms at 48 kHz
+    float outputPeak = 0.0f;
+    double outputSquareSum = 0.0;
+    bool trackingActive = false;
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const float rawSample = inputSamples[static_cast<size_t> (i)];
+
+        const float gateSample = gateHighPassFilter.processSample (rawSample);
+        envelopeFollower.processSample (gateSample);
+        const bool gateOpen = envelopeFollower.isGateOpen();
+
+        pitchLevelEstimate = juce::jmax (pitchLevelEstimate * 0.9995f, std::abs (rawSample));
+        const float pitchGain = juce::jlimit (1.0f, 12.0f, 0.08f / juce::jmax (pitchLevelEstimate, 1.0e-4f));
+        const float gainedSample = rawSample * pitchGain;
+
+        // Keep pitch analysis warm while gated so notes lock faster on attack.
+        pitchTracker.pushSample (gainedSample);
+        inputPreRoll[static_cast<size_t> (preRollWriteIndex)] = gainedSample;
+        preRollWriteIndex = (preRollWriteIndex + 1) % static_cast<int> (inputPreRoll.size());
+
+        if (! gateOpen)
+        {
+            if (gateWasOpen)
+                gateClosedSampleCount = 0;
+
+            ++gateClosedSampleCount;
+            gateWasOpen = false;
+            gateOpenSampleCount = 0;
+
+            if (gateClosedSampleCount >= gateCloseClearSamples)
+            {
+                pitchTracker.flush();
+                latchedPitchHz = 0.0f;
+                pitchLevelEstimate = 0.0f;
+                gateClosedSampleCount = 0;
+                synthEngine.muteImmediately();
+            }
+            else
+            {
+                // Brief gate dips use ADSR release — hard-muting every closed sample
+                // was zeroing the envelope and leaving only sparse attack clicks.
+                synthEngine.setPitchState (0.0f, false);
+            }
+
+            const float sample = synthEngine.processSample();
+            writeSampleToAllChannels (buffer, i, sample);
+            outputPeak = juce::jmax (outputPeak, std::abs (sample));
+            outputSquareSum += static_cast<double> (sample) * static_cast<double> (sample);
             continue;
         }
 
-        gateWasOpen = gateOpen;
+        gateWasOpen = true;
+        gateClosedSampleCount = 0;
+        ++gateOpenSampleCount;
 
-        trackingActive = gateOpen
-                      && pitchTracker.isVoiced()
-                      && pitchTracker.getConfidence() >= pitchTracker.getMinConfidenceThreshold()
-                                 + (1.0f - juce::jlimit (0.0f, 1.0f, envelopeFollower.getEnvelopeLinear() * 8.0f)) * 0.12f;
-        synthEngine.setPitchState (pitchTracker.getFrequency(), trackingActive);
+        const float frequency = pitchTracker.getFrequency();
+        const float candidateHz = pitchTracker.getCandidateFrequency();
+        const float confidence = pitchTracker.getConfidence();
+        const float candidateConf = pitchTracker.getCandidateConfidence();
+        const float minConfidence = pitchTracker.getMinConfidenceThreshold();
+
+        const bool reliablePitch = pitchTracker.isVoiced()
+                                && frequency > 70.0f
+                                && confidence >= minConfidence * 0.65f;
+
+        float synthHz = 0.0f;
+
+        if (reliablePitch)
+            synthHz = frequency;
+        else if (frequency > 70.0f && confidence >= minConfidence * 0.4f)
+            synthHz = frequency;
+        else if (candidateHz > 70.0f && candidateConf >= minConfidence * 0.35f)
+            synthHz = candidateHz;
+        else if (latchedPitchHz > 70.0f && (pitchTracker.isVoiced() || confidence >= minConfidence * 0.25f))
+            synthHz = latchedPitchHz;
+
+        if (reliablePitch || (frequency > 70.0f && confidence >= minConfidence * 0.5f))
+            latchedPitchHz = frequency > 70.0f ? frequency : synthHz;
+
+        // Gate open + usable pitch → sound. Do not require per-sample amplitude
+        // (zero crossings used to briefly unvoice and retrigger/silence the synth).
+        trackingActive = synthHz > 70.0f
+                      && (reliablePitch
+                          || pitchTracker.isVoiced()
+                          || confidence >= minConfidence * 0.35f
+                          || candidateConf >= minConfidence * 0.35f
+                          || latchedPitchHz > 70.0f);
+
+        const float outputHz = trackingActive ? synthHz : 0.0f;
+        synthEngine.setPitchState (outputHz, trackingActive);
         const float sample = synthEngine.processSample();
-        left[i] = sample;
-        right[i] = sample;
+        writeSampleToAllChannels (buffer, i, sample);
+        outputPeak = juce::jmax (outputPeak, std::abs (sample));
+        outputSquareSum += static_cast<double> (sample) * static_cast<double> (sample);
     }
 
-    displayedFrequency.store (pitchTracker.getFrequency());
+    const float displayHz = pitchTracker.getFrequency() > 70.0f
+                              ? pitchTracker.getFrequency()
+                              : (latchedPitchHz > 70.0f ? latchedPitchHz : pitchTracker.getCandidateFrequency());
+
+    displayedFrequency.store (displayHz);
     displayedConfidence.store (pitchTracker.getConfidence());
     displayedVoiced.store (trackingActive);
+    displayedInputPeak.store (inputPeak);
+    displayedOutputPeak.store (outputPeak);
+    displayedOutputRms.store (numSamples > 0
+                                  ? static_cast<float> (std::sqrt (outputSquareSum / numSamples))
+                                  : 0.0f);
     displayedGateOpen.store (envelopeFollower.isGateOpen());
     displayedGateEnvelopeDb.store (envelopeFollower.getEnvelopeDb());
-    displayedLatencyMs.store (1000.0 * static_cast<double> (getLatencySamples()) / getSampleRate());
+    displayedLatencyMs.store (1000.0 * static_cast<double> (getLatencySamples()) / sampleRate);
 }
 
 juce::AudioProcessorEditor* GuitarSynthAudioProcessor::createEditor()

@@ -1,9 +1,29 @@
 #include <JuceHeader.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#include "AudioDeviceHelpers.h"
 
 namespace
 {
-class GuitarSynthStandaloneApp final : public juce::JUCEApplication
+void ensureLiveInputUnmuted (juce::PropertySet* settings)
+{
+    if (settings != nullptr)
+        settings->setValue ("shouldMuteInput", false);
+}
+
+void ensureAudioDeviceRunning (juce::StandaloneFilterWindow& window, juce::PropertySet* settings)
+{
+    if (window.pluginHolder == nullptr)
+        return;
+
+    if (audioDeviceHelpers::isOutputReady (window.getDeviceManager()))
+        return;
+
+    if (! audioDeviceHelpers::repairOutput (*window.pluginHolder, settings))
+        audioDeviceHelpers::showOutputNotReadyMessage();
+}
+
+class GuitarSynthStandaloneApp final : public juce::JUCEApplication,
+                                       private juce::Timer
 {
 public:
     GuitarSynthStandaloneApp()
@@ -21,23 +41,30 @@ public:
 
     void initialise (const juce::String&) override
     {
-        auto holder = std::make_unique<juce::StandalonePluginHolder> (appProperties.getUserSettings(), false);
+        ensureLiveInputUnmuted (appProperties.getUserSettings());
 
-        // Live guitar input is required; JUCE defaults to muted input to prevent speaker feedback.
-        holder->getMuteInputValue().setValue (false);
+        auto launch = [this]
+        {
+            createMainWindow();
+        };
 
-        mainWindow = std::make_unique<juce::StandaloneFilterWindow> (
-            getApplicationName(),
-            juce::LookAndFeel::getDefaultLookAndFeel()
-                .findColour (juce::ResizableWindow::backgroundColourId),
-            std::move (holder));
+       #if JUCE_MAC || JUCE_IOS
+        if (juce::RuntimePermissions::isRequired (juce::RuntimePermissions::recordAudio)
+            && ! juce::RuntimePermissions::isGranted (juce::RuntimePermissions::recordAudio))
+        {
+            juce::RuntimePermissions::request (juce::RuntimePermissions::recordAudio,
+                                               [launch] (bool) { launch(); });
+            return;
+        }
+       #endif
 
-        if (mainWindow != nullptr)
-            mainWindow->setVisible (true);
+        launch();
     }
 
     void shutdown() override
     {
+        stopTimer();
+
         if (mainWindow != nullptr && mainWindow->pluginHolder != nullptr)
             mainWindow->pluginHolder->savePluginState();
 
@@ -54,8 +81,70 @@ public:
     }
 
 private:
+    void createMainWindow()
+    {
+        // Constrain standalone I/O to mono-in / stereo-out (guitar → Main L/R).
+        juce::Array<juce::StandalonePluginHolder::PluginInOuts> ioConfig;
+        ioConfig.add ({ 1, 2 });
+
+        auto holder = std::make_unique<juce::StandalonePluginHolder> (
+            appProperties.getUserSettings(),
+            false,
+            juce::String{},
+            nullptr,
+            ioConfig);
+        holder->getMuteInputValue().setValue (false);
+
+        mainWindow = std::make_unique<juce::StandaloneFilterWindow> (
+            getApplicationName(),
+            juce::LookAndFeel::getDefaultLookAndFeel()
+                .findColour (juce::ResizableWindow::backgroundColourId),
+            std::move (holder));
+
+        if (mainWindow == nullptr)
+            return;
+
+        ensureLiveInputUnmuted (appProperties.getUserSettings());
+
+        // Prefer Main L/R only (Audient headphones monitor Main, not Loop-back).
+        audioDeviceHelpers::ensureActiveOutputChannels (mainWindow->getDeviceManager());
+        mainWindow->pluginHolder->startPlaying();
+
+        if (! audioDeviceHelpers::isOutputReady (mainWindow->getDeviceManager()))
+        {
+            if (mainWindow->getDeviceManager().getCurrentAudioDevice() == nullptr)
+                startTimer (100);
+            else
+                ensureAudioDeviceRunning (*mainWindow, appProperties.getUserSettings());
+        }
+
+        mainWindow->setVisible (true);
+    }
+
+    void timerCallback() override
+    {
+        if (mainWindow == nullptr)
+        {
+            stopTimer();
+            return;
+        }
+
+        if (audioDeviceHelpers::isOutputReady (mainWindow->getDeviceManager()))
+        {
+            stopTimer();
+            return;
+        }
+
+        if (++repairAttempts > 5)
+        {
+            stopTimer();
+            ensureAudioDeviceRunning (*mainWindow, appProperties.getUserSettings());
+        }
+    }
+
     juce::ApplicationProperties appProperties;
     std::unique_ptr<juce::StandaloneFilterWindow> mainWindow;
+    int repairAttempts = 0;
 };
 } // namespace
 

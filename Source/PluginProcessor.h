@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <vector>
 #include "PitchTracker.h"
 #include "EnvelopeFollower.h"
 #include "SynthEngine.h"
@@ -42,9 +43,20 @@ public:
     double getDisplayedLatencyMs() const noexcept { return displayedLatencyMs.load(); }
 
     float getDisplayedInputPeak() const noexcept { return displayedInputPeak.load(); }
+    float getDisplayedInputPeakCh0() const noexcept { return displayedInputPeakCh0.load(); }
+    float getDisplayedInputPeakCh1() const noexcept { return displayedInputPeakCh1.load(); }
+    float getDisplayedOutputPeak() const noexcept { return displayedOutputPeak.load(); }
+    float getDisplayedOutputRms() const noexcept { return displayedOutputRms.load(); }
     float getDisplayedGateEnvelopeDb() const noexcept { return displayedGateEnvelopeDb.load(); }
     bool getDisplayedGateOpen() const noexcept { return displayedGateOpen.load(); }
     int getConfiguredInputChannels() const noexcept { return getTotalNumInputChannels(); }
+    int getConfiguredOutputChannels() const noexcept { return getTotalNumOutputChannels(); }
+    juce::String getBusLayoutDescription() const;
+
+    /** Plays diagnostics: sine, then forced synth, through the real output path. */
+    void requestOutputTestTone (double seconds) noexcept;
+    bool isOutputTestToneActive() const noexcept;
+    bool isForcedSynthTestActive() const noexcept;
 
     static juce::String getParameterId (const char* id) { return juce::String (id); }
 
@@ -69,13 +81,30 @@ private:
     EnvelopeFollower envelopeFollower;
     SynthEngine synthEngine;
 
-    juce::dsp::IIR::Filter<float> highPassFilter;
+    juce::dsp::IIR::Filter<float> gateHighPassFilter;
     juce::dsp::ProcessSpec spec {};
+
+    float latchedPitchHz = 0.0f;
+    bool gateWasOpen = false;
+    int gateOpenSampleCount = 0;
+    int gateClosedSampleCount = 0;
+    int preRollWriteIndex = 0;
+    float pitchLevelEstimate = 0.0f;
+    int64_t totalSamplesProcessed = 0;
+    int64_t testToneUntilSample = 0;
+    int64_t testSynthUntilSample = 0;
+    double testTonePhase = 0.0;
+
+    std::vector<float> inputPreRoll;
 
     std::atomic<float> displayedFrequency { 0.0f };
     std::atomic<float> displayedConfidence { 0.0f };
     std::atomic<bool> displayedVoiced { false };
     std::atomic<float> displayedInputPeak { 0.0f };
+    std::atomic<float> displayedInputPeakCh0 { 0.0f };
+    std::atomic<float> displayedInputPeakCh1 { 0.0f };
+    std::atomic<float> displayedOutputPeak { 0.0f };
+    std::atomic<float> displayedOutputRms { 0.0f };
     std::atomic<float> displayedGateEnvelopeDb { -100.0f };
     std::atomic<bool> displayedGateOpen { false };
     std::atomic<double> displayedLatencyMs { 0.0 };

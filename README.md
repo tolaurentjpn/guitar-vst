@@ -4,7 +4,7 @@ Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar 
 
 ## Features
 
-- YIN pitch tracking optimized for monophonic guitar (80 Hz – 1200 Hz)
+- pYIN (probabilistic YIN) pitch tracking optimized for monophonic guitar (70 Hz – 1200 Hz)
 - Frequency-direct oscillator control (no MIDI note quantization delay)
 - Input gate / envelope follower for natural note articulation
 - Subtractive synth: sine, saw, or square oscillator + resonant low-pass filter + ADSR
@@ -72,10 +72,12 @@ cmake --build build --config Release -j
 ## Live setup
 
 1. Connect guitar → audio interface input.
-2. Open **Guitar Synth.app** (Standalone).
-3. Select your interface as input and output in **Audio/MIDI Settings**.
-4. Set buffer size to 128 samples (or 64 if your interface supports it).
-5. Play single-note lines for best tracking; bends and hammer-ons are supported with glide enabled.
+2. Open **Guitar Synth.app** (Standalone), or load the VST3/AU in your DAW.
+3. Select your interface as input and output in **Audio/MIDI Settings** (Standalone), or route I/O in the DAW.
+4. Click **Test Output** — you should hear a 440 Hz tone. The header shows which output device is active; listen on that device (headphones on your interface if Output is set to Audient, etc.).
+5. **Audient iD4 / similar interfaces:** If the app shows `Out: ~-2 dB` but headphones are silent, turn the hardware **Monitor Mix** control toward **DAW / USB playback**. Fully toward Input only passes the dry guitar and mutes software audio.
+6. Set buffer size to 128 samples (or 64 if your interface supports it).
+7. Play single-note lines for best tracking; bends and hammer-ons are supported with glide enabled.
 
 ## Parameters
 

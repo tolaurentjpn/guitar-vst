@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "AudioDeviceHelpers.h"
 
 namespace
 {
@@ -114,6 +115,39 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     trackingAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramTrackingSensitivity, trackingSlider);
     gateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramGateThreshold, gateSlider);
 
+    outputTestButton.onClick = [this]
+    {
+       #if JucePlugin_Build_Standalone
+        auto* holder = juce::StandalonePluginHolder::getInstance();
+        if (holder != nullptr)
+        {
+            auto& deviceManager = holder->deviceManager;
+            if (! audioDeviceHelpers::isOutputReady (deviceManager))
+            {
+                juce::PropertySet* settings = holder->settings.get();
+                if (! audioDeviceHelpers::repairOutput (*holder, settings))
+                {
+                    audioDeviceHelpers::showOutputNotReadyMessage (
+                        audioDeviceHelpers::getOutputDeviceName (deviceManager));
+                    return;
+                }
+            }
+
+            audioProcessor.requestOutputTestTone (1.5);
+            return;
+        }
+       #endif
+
+        audioProcessor.requestOutputTestTone (1.5);
+    };
+    addAndMakeVisible (outputTestButton);
+
+   #if JucePlugin_Build_Standalone
+    outputDeviceLabel.setJustificationType (juce::Justification::centredRight);
+    outputDeviceLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible (outputDeviceLabel);
+   #endif
+
     startTimerHz (30);
 }
 
@@ -168,10 +202,13 @@ void GuitarSynthAudioProcessorEditor::resized()
     auto bounds = getLocalBounds().reduced (16);
 
     auto header = bounds.removeFromTop (72);
-    titleLabel.setBounds (header.removeFromLeft (260));
-    latencyLabel.setBounds (header.removeFromRight (180));
+    titleLabel.setBounds (header.removeFromLeft (220));
+    outputTestButton.setBounds (header.removeFromRight (100).reduced (4, 12));
+    latencyLabel.setBounds (header.removeFromRight (160));
     voicedIndicator->setBounds (header.removeFromRight (28).reduced (4));
-
+   #if JucePlugin_Build_Standalone
+    outputDeviceLabel.setBounds (header.reduced (8, 18));
+   #endif
     bounds.removeFromTop (12);
     auto display = bounds.removeFromTop (130);
     pitchLabel.setBounds (display.withTrimmedLeft (120).withTrimmedRight (120).removeFromTop (42));
@@ -220,7 +257,7 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
     const bool gateOpen = audioProcessor.getDisplayedGateOpen();
     const float gateEnvelopeDb = audioProcessor.getDisplayedGateEnvelopeDb();
 
-    pitchLabel.setText (voiced && frequency > 0.0f
+    pitchLabel.setText (frequency > 0.0f
                             ? juce::String (frequency, 1) + " Hz"
                             : juce::String ("--- Hz"),
                         juce::dontSendNotification);
@@ -228,22 +265,76 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
     confidenceLabel.setText ("Confidence: " + juce::String (juce::roundToInt (confidence * 100.0f)) + "%",
                              juce::dontSendNotification);
     gateLevelLabel.setText ("Gate: " + juce::String (gateOpen ? "open" : "closed")
-                            + " (" + juce::String (gateEnvelopeDb, 1) + " dB)",
+                            + "  env " + juce::String (gateEnvelopeDb, 1) + " dB",
                             juce::dontSendNotification);
     gateLevelLabel.setColour (juce::Label::textColourId,
                               gateOpen ? juce::Colour (0xff4cd964) : juce::Colours::lightgrey);
 
-    if (inputPeak > 1.0e-6f)
+    const float outputPeak = audioProcessor.getDisplayedOutputPeak();
+    const float outputRms = audioProcessor.getDisplayedOutputRms();
+    if (audioProcessor.isOutputTestToneActive())
     {
-        const float inputDb = 20.0f * std::log10 (inputPeak);
-        inputLevelLabel.setText ("Input: " + juce::String (inputDb, 1) + " dBFS ("
-                                 + juce::String (audioProcessor.getConfiguredInputChannels()) + " ch)",
-                                 juce::dontSendNotification);
-        if (gateOpen && ! voiced)
-            inputHintLabel.setText ("Gate is open on input noise — raise the Gate knob (try -40 dB or higher)",
+       #if JucePlugin_Build_Standalone
+        juce::String deviceHint;
+        if (auto* holder = juce::StandalonePluginHolder::getInstance())
+        {
+            const auto name = audioDeviceHelpers::getOutputDeviceName (holder->deviceManager);
+            if (name.isNotEmpty())
+                deviceHint = " on " + name;
+        }
+        if (audioProcessor.isForcedSynthTestActive())
+            inputHintLabel.setText ("Test 2/2: SynthEngine saw @ 220 Hz" + deviceHint
+                                        + " — if silent here but phase 1 worked, report it",
                                     juce::dontSendNotification);
         else
-            inputHintLabel.setText ("", juce::dontSendNotification);
+            inputHintLabel.setText ("Test 1/2: sine @ 440 Hz" + deviceHint
+                                        + " — listen on that device",
+                                    juce::dontSendNotification);
+       #else
+        inputHintLabel.setText (audioProcessor.isForcedSynthTestActive()
+                                    ? "Test 2/2: SynthEngine saw @ 220 Hz through plugin output"
+                                    : "Test 1/2: sine @ 440 Hz through plugin output",
+                                juce::dontSendNotification);
+       #endif
+    }
+    else if (inputPeak > 1.0e-6f)
+    {
+        const float inputDb = 20.0f * std::log10 (inputPeak);
+        const float outputDb = outputPeak > 1.0e-6f ? 20.0f * std::log10 (outputPeak) : -100.0f;
+        const float rmsDb = outputRms > 1.0e-6f ? 20.0f * std::log10 (outputRms) : -100.0f;
+        const float ch0 = audioProcessor.getDisplayedInputPeakCh0();
+        const float ch1 = audioProcessor.getDisplayedInputPeakCh1();
+        const float ch0Db = ch0 > 1.0e-6f ? 20.0f * std::log10 (ch0) : -100.0f;
+        const float ch1Db = ch1 > 1.0e-6f ? 20.0f * std::log10 (ch1) : -100.0f;
+        inputLevelLabel.setText ("In: " + juce::String (inputDb, 1) + " dB  Out pk "
+                                 + (outputPeak > 1.0e-6f ? juce::String (outputDb, 1) + " dB"
+                                                         : juce::String ("-inf"))
+                                 + " rms "
+                                 + (outputRms > 1.0e-6f ? juce::String (rmsDb, 1) + " dB"
+                                                        : juce::String ("-inf")),
+                                 juce::dontSendNotification);
+        inputHintLabel.setColour (juce::Label::textColourId, juce::Colour (0xffffcc66));
+        if (gateOpen && ! voiced)
+            inputHintLabel.setText ("Gate open — waiting for pitch (lower Tracking or raise input gain) | "
+                                        + audioProcessor.getBusLayoutDescription()
+                                        + " ch1 " + juce::String (ch0Db, 0)
+                                        + " ch2 " + juce::String (ch1Db, 0),
+                                    juce::dontSendNotification);
+        else if (gateOpen && voiced && outputPeak < 1.0e-4f)
+            inputHintLabel.setText ("Pitch locked but output is silent — raise Master, or click Test Output",
+                                    juce::dontSendNotification);
+        else if (outputPeak > 0.05f && outputRms < 0.01f)
+            inputHintLabel.setText ("Out peak is high but RMS is tiny (clicks only) — gate may be chattering; lower Gate threshold",
+                                    juce::dontSendNotification);
+        else if (outputPeak > 0.05f)
+            inputHintLabel.setText ("Plugin outputting (" + audioProcessor.getBusLayoutDescription()
+                                        + ") — if dry guitar masks it, turn Audient Monitor Mix toward DAW/USB",
+                                    juce::dontSendNotification);
+        else
+            inputHintLabel.setText (audioProcessor.getBusLayoutDescription()
+                                        + " | ch1 " + juce::String (ch0Db, 0)
+                                        + " dB  ch2 " + juce::String (ch1Db, 0) + " dB",
+                                    juce::dontSendNotification);
     }
     else if (audioProcessor.getConfiguredInputChannels() == 0)
     {
@@ -260,6 +351,24 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
     }
     latencyLabel.setText ("Latency: " + juce::String (audioProcessor.getDisplayedLatencyMs(), 1) + " ms",
                           juce::dontSendNotification);
+
+   #if JucePlugin_Build_Standalone
+    if (auto* holder = juce::StandalonePluginHolder::getInstance())
+    {
+        const auto deviceName = audioDeviceHelpers::getOutputDeviceName (holder->deviceManager);
+        const bool ready = audioDeviceHelpers::isOutputReady (holder->deviceManager);
+        const int activeOuts = audioDeviceHelpers::getActiveOutputChannelCount (holder->deviceManager);
+        const int availableOuts = audioDeviceHelpers::getAvailableOutputChannelCount (holder->deviceManager);
+        juce::String label = deviceName.isNotEmpty()
+                                 ? ((ready ? "Out: " : "Out (not ready): ") + deviceName)
+                                 : "Out: none";
+        if (availableOuts > 0)
+            label += " (" + juce::String (activeOuts) + "/" + juce::String (availableOuts) + " ch)";
+        outputDeviceLabel.setText (label, juce::dontSendNotification);
+        outputDeviceLabel.setColour (juce::Label::textColourId,
+                                     ready ? juce::Colours::lightgrey : juce::Colour (0xffff6666));
+    }
+   #endif
 
     if (auto* led = dynamic_cast<VoicedLed*> (voicedIndicator.get()))
         led->setActive (voiced);

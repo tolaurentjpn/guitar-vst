@@ -56,6 +56,8 @@ private:
     EnvStage envStage = EnvStage::idle;
     float envelope = 0.0f;
     float masterGain = 0.8f;
+    float lastFilterCutoff = -1.0f;
+    float lastFilterResonance = -1.0f;
 
     bool activeVoiced = false;
 };

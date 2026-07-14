@@ -4,15 +4,16 @@ namespace
 {
     float waveformFunction (WaveformType type, float phase)
     {
+        // JUCE Oscillator passes phase in [-pi, pi].
         switch (type)
         {
             case WaveformType::sine:
                 return std::sin (phase);
             case WaveformType::saw:
-                return 2.0f * phase / juce::MathConstants<float>::twoPi - 1.0f;
+                return phase / juce::MathConstants<float>::pi;
             case WaveformType::square:
             default:
-                return phase < juce::MathConstants<float>::pi ? 1.0f : -1.0f;
+                return phase < 0.0f ? -1.0f : 1.0f;
         }
     }
 }
@@ -42,18 +43,31 @@ void SynthEngine::reset()
 
 void SynthEngine::setWaveform (WaveformType type)
 {
+    if (type == waveform && oscillator.isInitialised())
+        return;
+
     waveform = type;
     oscillator.initialise ([type] (float x) { return waveformFunction (type, x); });
 }
 
 void SynthEngine::setFilterCutoff (float hz)
 {
-    filter.setCutoffFrequency (juce::jlimit (20.0f, static_cast<float> (sampleRate * 0.45), hz));
+    const float clamped = juce::jlimit (20.0f, static_cast<float> (sampleRate * 0.45), hz);
+    if (clamped == lastFilterCutoff)
+        return;
+
+    lastFilterCutoff = clamped;
+    filter.setCutoffFrequency (clamped);
 }
 
 void SynthEngine::setFilterResonance (float resonance)
 {
-    filter.setResonance (juce::jlimit (0.1f, 2.0f, resonance));
+    const float clamped = juce::jlimit (0.1f, 2.0f, resonance);
+    if (clamped == lastFilterResonance)
+        return;
+
+    lastFilterResonance = clamped;
+    filter.setResonance (clamped);
 }
 
 void SynthEngine::setAttackMs (float ms)
@@ -78,7 +92,10 @@ void SynthEngine::setReleaseMs (float ms)
 
 void SynthEngine::setGlideMs (float ms)
 {
-    glideCoeff = msToCoeff (juce::jmax (0.0f, ms));
+    if (ms <= 0.0f)
+        glideCoeff = 0.0f;
+    else
+        glideCoeff = msToCoeff (ms);
 }
 
 void SynthEngine::setMasterGain (float gain)
@@ -112,12 +129,20 @@ void SynthEngine::setPitchState (float hz, bool trackingActive)
 
         targetFrequency = hz;
 
-        if (envStage == EnvStage::idle || envStage == EnvStage::release)
+        if (envStage == EnvStage::idle)
         {
             currentFrequency = hz;
             envStage = EnvStage::attack;
             oscillator.reset();
             filter.reset();
+            envelope = 0.0f;
+            activeVoiced = true;
+        }
+        else if (envStage == EnvStage::release)
+        {
+            // Resume without retriggering the oscillator — avoids silencing on brief
+            // unvoiced gaps / zero-crossing flicker.
+            envStage = envelope < sustainLevel ? EnvStage::attack : EnvStage::sustain;
             activeVoiced = true;
         }
         else if (significantJump && glideCoeff <= 0.0f)
@@ -128,7 +153,7 @@ void SynthEngine::setPitchState (float hz, bool trackingActive)
 
         activeVoiced = true;
     }
-    else if (activeVoiced && envStage != EnvStage::release)
+    else if (activeVoiced && envStage != EnvStage::release && envStage != EnvStage::idle)
     {
         envStage = EnvStage::release;
     }
@@ -201,13 +226,15 @@ float SynthEngine::renderSample() noexcept
         return 0.0f;
 
     const float osc = oscillator.processSample (0.0f);
-    return filter.processSample (0, osc * amp);
+    return juce::jlimit (-1.0f, 1.0f, filter.processSample (0, osc * amp));
 }
 
 void SynthEngine::updateFilter()
 {
-    filter.setCutoffFrequency (2000.0f);
-    filter.setResonance (0.707f);
+    lastFilterCutoff = 2000.0f;
+    lastFilterResonance = 0.707f;
+    filter.setCutoffFrequency (lastFilterCutoff);
+    filter.setResonance (lastFilterResonance);
 }
 
 float SynthEngine::msToCoeff (float ms) const
