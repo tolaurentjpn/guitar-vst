@@ -1,13 +1,18 @@
 # Guitar Synth
 
-Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar input in real time and drives a subtractive synthesizer with minimal latency.
+Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar input in real time and drives a dual-oscillator subtractive synthesizer with unison, filter envelopes, a reorderable FX rack, and factory presets.
 
 ## Features
 
 - Hybrid pitch tracking: YIN period discovery + a tiny neural net for octave / voicing decisions (80 Hz – 1200 Hz)
 - Frequency-direct oscillator control (no MIDI note quantization delay)
 - Input gate / envelope follower with ADSR release on note-off (no hard mute cut)
-- Subtractive synth: sine, saw, or square oscillator + resonant low-pass filter + ADSR
+- Dual oscillators (sine / saw / square) with per-osc low-pass filter and amp ADSR
+- Vital-style **unison** per oscillator: Voices (1–8), Detune, Stereo Spread, Blend, Phase Random
+- Per-filter **ADSR envelopes** with Amount, edited as draggable plots on the Filter Env tab
+- Dual LFOs (rate, shape, cutoff / resonance / pitch / amp modulation)
+- Reorderable **FX rack** (Distortion, Compressor, Delay, Reverb) on the synth output — not on the guitar input
+- Factory **presets** (Init, basses, leads, SuperSaw, pad, pluck, keys, organ, filter sweep) programmed with dual-osc, LFO, filter env, and FX-rack settings
 - Live pitch display (Hz + note name), confidence meter, voiced indicator, latency readout
 - Formats: **VST3**, **AU**, and **Standalone**
 
@@ -76,6 +81,7 @@ cmake --build build --config Release -j
 3. Select your interface as input and output in **Audio/MIDI Settings**.
 4. Set buffer size to 128 samples (or 64 if your interface supports it).
 5. Play single-note lines for best tracking; bends and hammer-ons are supported with glide enabled.
+6. Pick a preset from the header menu, or open the **Filter Env** tab to shape filter sweeps by dragging the ADSR plots.
 
 ## Pitch tracking (YIN + OctaveNet)
 
@@ -96,13 +102,21 @@ Rebuild the plugin after regenerating weights.
 
 | Parameter | Description |
 |-----------|-------------|
-| Waveform | Sine, saw, or square oscillator |
-| Cutoff / Resonance | Low-pass filter tone shaping |
-| Attack / Decay / Sustain / Release | Amplitude envelope |
+| Waveform (Osc 1 / 2) | Sine, saw, or square |
+| Osc 2 Mix / Octave / Detune | Second oscillator balance and pitch offset |
+| Voices / Unison Detune / Spread / Blend | Per-oscillator unison stack (1–8 voices) |
+| Cutoff / Resonance | Per-osc low-pass filter |
+| Amp ADSR | Per-osc amplitude envelope |
+| Filter Env ADSR + Amount | Per-filter envelope (plot editor); Amount opens/closes cutoff |
 | Glide | Portamento between detected pitches |
 | Master | Output level |
 | Tracking | Pitch confidence threshold (higher = stricter) |
 | Gate | Input level threshold in dB |
+| LFO 1 / 2 | Rate, shape, and destinations (cutoff, resonance, pitch, amp) |
+| Distortion / Compressor / Delay / Reverb | Post-synth FX rack (enable, mix, and effect-specific controls); drag cards or use arrow buttons to reorder |
+| FX Order | Chain order of the four effects (defaults Dist → Comp → Delay → Reverb) |
+
+FX process the **synth stereo output** only. Keep guitar input relatively clean for reliable pitch tracking (do not rely on Distortion as an input drive).
 
 ## License
 
