@@ -14,6 +14,7 @@ public:
 
     float processSample (float input) noexcept;
     bool isGateOpen() const noexcept { return gateOpen; }
+    float getGateOutput() const noexcept { return gateOutput; }
     float getEnvelopeLinear() const noexcept { return envelope; }
     float getPeakHoldLinear() const noexcept { return peakHold; }
     float getEnvelopeDb() const noexcept;

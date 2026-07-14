@@ -112,12 +112,19 @@ void SynthEngine::setPitchState (float hz, bool trackingActive)
 
         targetFrequency = hz;
 
-        if (envStage == EnvStage::idle || envStage == EnvStage::release)
+        if (envStage == EnvStage::idle)
         {
             currentFrequency = hz;
             envStage = EnvStage::attack;
             oscillator.reset();
             filter.reset();
+            activeVoiced = true;
+        }
+        else if (envStage == EnvStage::release)
+        {
+            // Soft retrigger: keep oscillator/filter state to avoid mid-phrase clicks.
+            currentFrequency = hz;
+            envStage = EnvStage::attack;
             activeVoiced = true;
         }
         else if (significantJump && glideCoeff <= 0.0f)
@@ -131,6 +138,7 @@ void SynthEngine::setPitchState (float hz, bool trackingActive)
     else if (activeVoiced && envStage != EnvStage::release)
     {
         envStage = EnvStage::release;
+        activeVoiced = false;
     }
 }
 

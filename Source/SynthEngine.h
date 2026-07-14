@@ -27,6 +27,7 @@ public:
 
     void setPitchState (float hz, bool trackingActive);
     void muteImmediately() noexcept;
+    bool isIdle() const noexcept { return envStage == EnvStage::idle; }
     float processSample() noexcept;
     void processBlock (juce::AudioBuffer<float>& buffer, const float* gateEnvelope, int numSamples);
 

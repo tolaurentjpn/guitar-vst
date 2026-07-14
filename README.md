@@ -4,9 +4,9 @@ Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar 
 
 ## Features
 
-- YIN pitch tracking optimized for monophonic guitar (80 Hz – 1200 Hz)
+- Hybrid pitch tracking: YIN period discovery + a tiny neural net for octave / voicing decisions (80 Hz – 1200 Hz)
 - Frequency-direct oscillator control (no MIDI note quantization delay)
-- Input gate / envelope follower for natural note articulation
+- Input gate / envelope follower with ADSR release on note-off (no hard mute cut)
 - Subtractive synth: sine, saw, or square oscillator + resonant low-pass filter + ADSR
 - Live pitch display (Hz + note name), confidence meter, voiced indicator, latency readout
 - Formats: **VST3**, **AU**, and **Standalone**
@@ -28,10 +28,10 @@ Typical end-to-end latency at 48 kHz with a 128-sample buffer:
 2. Set audio buffer size to **64** or **128** samples in the Standalone audio settings.
 3. On first launch, macOS will ask for **Microphone** access — click **Allow**. If you previously denied it: **System Settings → Privacy & Security → Microphone → enable Guitar Synth**, or run `tccutil reset Microphone com.guitarsynth.plugin` and relaunch.
 4. Enable the correct **input channels** for your guitar in Audio Settings (usually input 1 on your interface).
-4. Use **headphones** when monitoring through speakers to avoid feedback (Standalone enables live input by default).
-5. Disable direct monitoring on your audio interface if you hear a dry double.
-6. Use a relatively clean guitar signal; heavy distortion makes tracking harder.
-7. Adjust **Gate** (default -48 dB) and **Tracking** knobs if notes fail to trigger, or if you hear synth output while idle. Raise Gate toward -40 dB if the gate opens on interface noise.
+5. Use **headphones** when monitoring through speakers to avoid feedback (Standalone enables live input by default).
+6. Disable direct monitoring on your audio interface if you hear a dry double.
+7. Use a relatively clean guitar signal; heavy distortion makes tracking harder.
+8. Adjust **Gate** (default -48 dB) and **Tracking** knobs if notes fail to trigger, or if you hear synth output while idle. Raise Gate toward -40 dB if the gate opens on interface noise.
 
 Run the automated checks after building:
 
@@ -76,6 +76,21 @@ cmake --build build --config Release -j
 3. Select your interface as input and output in **Audio/MIDI Settings**.
 4. Set buffer size to 128 samples (or 64 if your interface supports it).
 5. Play single-note lines for best tracking; bends and hammer-ons are supported with glide enabled.
+
+## Pitch tracking (YIN + OctaveNet)
+
+Period candidates come from classic YIN. A small MLP (`OctaveNet`, weights baked into `Source/OctaveNetWeights.h`) scores those candidates using CMNDF depths, harmonic clarity, and previous pitch — reducing classic A3↔A2 octave errors without an ONNX runtime.
+
+To retrain on synthetic (or later, your own) data:
+
+```bash
+cd "/Users/thomas/Documents/Data science/guitar_vst"
+python3 -m venv ml/.venv
+ml/.venv/bin/pip install -r ml/requirements.txt
+ml/.venv/bin/python ml/train_octave_net.py
+```
+
+Rebuild the plugin after regenerating weights.
 
 ## Parameters
 

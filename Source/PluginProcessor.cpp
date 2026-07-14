@@ -203,6 +203,11 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         if (gateOpen)
         {
             pitchTracker.pushSample (hpSample);
+
+            trackingActive = pitchTracker.isVoiced()
+                          && pitchTracker.getConfidence() >= pitchTracker.getMinConfidenceThreshold()
+                                     + (1.0f - juce::jlimit (0.0f, 1.0f, envelopeFollower.getEnvelopeLinear() * 8.0f)) * 0.12f;
+            synthEngine.setPitchState (pitchTracker.getFrequency(), trackingActive);
         }
         else
         {
@@ -211,20 +216,21 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             else
                 pitchTracker.clearVoicing();
 
-            synthEngine.muteImmediately();
-            gateWasOpen = gateOpen;
-            left[i] = 0.0f;
-            right[i] = 0.0f;
-            continue;
+            // Soft note-off: let ADSR release finish instead of hard-cutting.
+            synthEngine.setPitchState (0.0f, false);
+            trackingActive = false;
+
+            if (synthEngine.isIdle())
+            {
+                gateWasOpen = gateOpen;
+                left[i] = 0.0f;
+                right[i] = 0.0f;
+                continue;
+            }
         }
 
         gateWasOpen = gateOpen;
 
-        trackingActive = gateOpen
-                      && pitchTracker.isVoiced()
-                      && pitchTracker.getConfidence() >= pitchTracker.getMinConfidenceThreshold()
-                                 + (1.0f - juce::jlimit (0.0f, 1.0f, envelopeFollower.getEnvelopeLinear() * 8.0f)) * 0.12f;
-        synthEngine.setPitchState (pitchTracker.getFrequency(), trackingActive);
         const float sample = synthEngine.processSample();
         left[i] = sample;
         right[i] = sample;

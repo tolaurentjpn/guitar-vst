@@ -36,10 +36,21 @@ namespace
              + 0.10f * std::sin (4.0f * phase);
     }
 
-    void feedTone (PitchTracker& tracker, double sampleRate, float frequency, int numSamples)
+    float strongSecondSample (double sampleRate, float fundamentalHz, int sampleIndex)
+    {
+        const float t = static_cast<float> (sampleIndex) / static_cast<float> (sampleRate);
+        const float phase = juce::MathConstants<float>::twoPi * fundamentalHz * t;
+        return 0.25f * std::sin (phase)
+             + 0.65f * std::sin (2.0f * phase)
+             + 0.10f * std::sin (3.0f * phase);
+    }
+
+    void feedTone (PitchTracker& tracker, double sampleRate, float frequency, int numSamples,
+                   int& sampleIndex,
+                   float (*sampleFn) (double, float, int) = harmonicRichSample)
     {
         for (int i = 0; i < numSamples; ++i)
-            tracker.pushSample (harmonicRichSample (sampleRate, frequency, i));
+            tracker.pushSample (sampleFn (sampleRate, frequency, sampleIndex++));
     }
 
     float detectFrequency (double sampleRate, float targetFrequency)
@@ -48,7 +59,8 @@ namespace
         tracker.prepare (sampleRate);
 
         const int settleSamples = tracker.getWindowSize() * 4;
-        feedTone (tracker, sampleRate, targetFrequency, settleSamples);
+        int sampleIndex = 0;
+        feedTone (tracker, sampleRate, targetFrequency, settleSamples, sampleIndex);
 
         return tracker.getFrequency();
     }
@@ -61,8 +73,8 @@ namespace
         tracker.prepare (sampleRate);
 
         const int settleSamples = tracker.getWindowSize() * 4;
-        for (int i = 0; i < settleSamples; ++i)
-            tracker.pushSample (sampleFn (sampleRate, targetFrequency, i));
+        int sampleIndex = 0;
+        feedTone (tracker, sampleRate, targetFrequency, settleSamples, sampleIndex, sampleFn);
 
         return tracker.getFrequency();
     }
@@ -96,6 +108,10 @@ int main()
     expectTrue ("A3 (220 Hz) missing fundamental not detected an octave low",
                 a3MissingFundamental > 190.0f && a3MissingFundamental < 250.0f);
 
+    const float a3StrongSecond = detectCustomTone (sampleRate, strongSecondSample, 220.0f);
+    expectTrue ("A3 (220 Hz) strong 2nd harmonic not detected an octave low",
+                a3StrongSecond > 190.0f && a3StrongSecond < 250.0f);
+
     const float g3 = detectFrequency (sampleRate, 196.0f);
     expectTrue ("G3 (196 Hz) not detected an octave low",
                 g3 > 170.0f && g3 < 220.0f);
@@ -108,11 +124,43 @@ int main()
     expectTrue ("E4 (~330 Hz) missing fundamental not detected an octave low",
                 e4 > 290.0f && e4 < 370.0f);
 
+    // Transition sticky tests: A3 -> A2 and A2 -> A3 must settle on the new note.
+    {
+        PitchTracker tracker;
+        tracker.prepare (sampleRate);
+        int sampleIndex = 0;
+        const int settle = tracker.getWindowSize() * 4;
+
+        feedTone (tracker, sampleRate, 220.0f, settle, sampleIndex);
+        expectTrue ("Pre-transition A3 is near 220 Hz",
+                    tracker.getFrequency() > 190.0f && tracker.getFrequency() < 250.0f);
+
+        feedTone (tracker, sampleRate, 110.0f, settle, sampleIndex);
+        expectTrue ("A3->A2 transition settles near 110 Hz (not stuck at 220)",
+                    tracker.getFrequency() > 95.0f && tracker.getFrequency() < 125.0f);
+    }
+
+    {
+        PitchTracker tracker;
+        tracker.prepare (sampleRate);
+        int sampleIndex = 0;
+        const int settle = tracker.getWindowSize() * 4;
+
+        feedTone (tracker, sampleRate, 110.0f, settle, sampleIndex);
+        expectTrue ("Pre-transition A2 is near 110 Hz",
+                    tracker.getFrequency() > 95.0f && tracker.getFrequency() < 125.0f);
+
+        feedTone (tracker, sampleRate, 220.0f, settle, sampleIndex);
+        expectTrue ("A2->A3 transition settles near 220 Hz (not stuck at 110)",
+                    tracker.getFrequency() > 190.0f && tracker.getFrequency() < 250.0f);
+    }
+
     std::cout << "Open A: " << openA << " Hz\n";
     std::cout << "12th fret A: " << twelfthFretA << " Hz\n";
     std::cout << "Open E: " << openE << " Hz\n";
     std::cout << "12th fret E: " << twelfthFretE << " Hz\n";
-    std::cout << "A3 missing fundamental test: " << a3MissingFundamental << " Hz\n";
+    std::cout << "A3 missing fundamental: " << a3MissingFundamental << " Hz\n";
+    std::cout << "A3 strong 2nd: " << a3StrongSecond << " Hz\n";
     std::cout << "G3: " << g3 << " Hz, B3: " << b3 << " Hz, E4: " << e4 << " Hz\n";
     std::cout << testsRun << " tests run, " << testsFailed << " failed\n";
     return testsFailed == 0 ? 0 : 1;

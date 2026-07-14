@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include <vector>
+#include "OctaveNet.h"
 
 class PitchTracker
 {
@@ -37,8 +38,13 @@ public:
 private:
     float computeYinPitch (const float* data, int numSamples, float& outConfidence);
     int findLocalMinimumTau (int centreTau, int minTau, int maxTau) const;
-    float scoreHarmonicClarity (int tau, int minTau, int maxTau) const;
-    int correctOctaveTau (int tau, float yinThreshold, int minTau, int maxTau) const;
+    float softHarmonicClarity (int tau, int minTau, int maxTau) const;
+    int collectOctaveCandidates (int seedTau, float yinThreshold, int minTau, int maxTau,
+                                 int* candidates, int maxCandidates) const;
+    void fillCandidateFeatures (int tau, int minTau, int maxTau,
+                                float prevHz, float rms, float contrast,
+                                float* features) const;
+    void frameStats (const float* data, int numSamples, float& rms, float& contrast) const;
     void runAnalysis();
 
     double sampleRate = 44100.0;
