@@ -4,6 +4,7 @@
 #include "PitchTracker.h"
 #include "EnvelopeFollower.h"
 #include "SynthEngine.h"
+#include "EffectChain.h"
 
 class GuitarSynthAudioProcessor : public juce::AudioProcessor
 {
@@ -23,12 +24,12 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override;
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    int getNumPrograms() override;
+    int getCurrentProgram() override;
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
 
     void getStateInformation (juce::MemoryBlock& destData) override;
@@ -49,16 +50,101 @@ public:
     static juce::String getParameterId (const char* id) { return juce::String (id); }
 
     static constexpr const char* paramWaveform = "waveform";
+    static constexpr const char* paramOsc2Waveform = "osc2Waveform";
+    static constexpr const char* paramOsc2Mix = "osc2Mix";
+    static constexpr const char* paramOsc2Octave = "osc2Octave";
+    static constexpr const char* paramOsc2Detune = "osc2Detune";
+
+    static constexpr const char* paramOsc1UnisonVoices = "osc1UnisonVoices";
+    static constexpr const char* paramOsc1UnisonDetune = "osc1UnisonDetune";
+    static constexpr const char* paramOsc1UnisonSpread = "osc1UnisonSpread";
+    static constexpr const char* paramOsc1UnisonBlend = "osc1UnisonBlend";
+    static constexpr const char* paramOsc1PhaseRandom = "osc1PhaseRandom";
+    static constexpr const char* paramOsc2UnisonVoices = "osc2UnisonVoices";
+    static constexpr const char* paramOsc2UnisonDetune = "osc2UnisonDetune";
+    static constexpr const char* paramOsc2UnisonSpread = "osc2UnisonSpread";
+    static constexpr const char* paramOsc2UnisonBlend = "osc2UnisonBlend";
+    static constexpr const char* paramOsc2PhaseRandom = "osc2PhaseRandom";
+
     static constexpr const char* paramFilterCutoff = "filterCutoff";
     static constexpr const char* paramFilterResonance = "filterResonance";
+    static constexpr const char* paramOsc2FilterCutoff = "osc2FilterCutoff";
+    static constexpr const char* paramOsc2FilterResonance = "osc2FilterResonance";
+
     static constexpr const char* paramAttack = "attack";
     static constexpr const char* paramDecay = "decay";
     static constexpr const char* paramSustain = "sustain";
     static constexpr const char* paramRelease = "release";
+    static constexpr const char* paramOsc2Attack = "osc2Attack";
+    static constexpr const char* paramOsc2Decay = "osc2Decay";
+    static constexpr const char* paramOsc2Sustain = "osc2Sustain";
+    static constexpr const char* paramOsc2Release = "osc2Release";
+
+    static constexpr const char* paramFilterEnv1Attack = "filterEnv1Attack";
+    static constexpr const char* paramFilterEnv1Decay = "filterEnv1Decay";
+    static constexpr const char* paramFilterEnv1Sustain = "filterEnv1Sustain";
+    static constexpr const char* paramFilterEnv1Release = "filterEnv1Release";
+    static constexpr const char* paramFilterEnv1Amount = "filterEnv1Amount";
+    static constexpr const char* paramFilterEnv2Attack = "filterEnv2Attack";
+    static constexpr const char* paramFilterEnv2Decay = "filterEnv2Decay";
+    static constexpr const char* paramFilterEnv2Sustain = "filterEnv2Sustain";
+    static constexpr const char* paramFilterEnv2Release = "filterEnv2Release";
+    static constexpr const char* paramFilterEnv2Amount = "filterEnv2Amount";
+    static constexpr const char* paramFilterEnvSync = "filterEnvSync";
+
     static constexpr const char* paramGlide = "glide";
     static constexpr const char* paramMasterGain = "masterGain";
     static constexpr const char* paramTrackingSensitivity = "trackingSensitivity";
     static constexpr const char* paramGateThreshold = "gateThreshold";
+    static constexpr const char* paramAdsrSync = "adsrSync";
+    static constexpr const char* paramLfo1Enabled = "lfo1Enabled";
+    static constexpr const char* paramLfo1Rate = "lfo1Rate";
+    static constexpr const char* paramLfo1Shape = "lfo1Shape";
+    static constexpr const char* paramLfo1Filter = "lfo1Filter";
+    static constexpr const char* paramLfo1Resonance = "lfo1Resonance";
+    static constexpr const char* paramLfo1Pitch = "lfo1Pitch";
+    static constexpr const char* paramLfo1Amp = "lfo1Amp";
+    static constexpr const char* paramLfo2Enabled = "lfo2Enabled";
+    static constexpr const char* paramLfo2Rate = "lfo2Rate";
+    static constexpr const char* paramLfo2Shape = "lfo2Shape";
+    static constexpr const char* paramLfo2Filter = "lfo2Filter";
+    static constexpr const char* paramLfo2Resonance = "lfo2Resonance";
+    static constexpr const char* paramLfo2Pitch = "lfo2Pitch";
+    static constexpr const char* paramLfo2Amp = "lfo2Amp";
+
+    static constexpr const char* paramDistEnabled = "distEnabled";
+    static constexpr const char* paramDistMode = "distMode";
+    static constexpr const char* paramDistDrive = "distDrive";
+    static constexpr const char* paramDistTone = "distTone";
+    static constexpr const char* paramDistMix = "distMix";
+
+    static constexpr const char* paramCompEnabled = "compEnabled";
+    static constexpr const char* paramCompThreshold = "compThreshold";
+    static constexpr const char* paramCompRatio = "compRatio";
+    static constexpr const char* paramCompAttack = "compAttack";
+    static constexpr const char* paramCompRelease = "compRelease";
+    static constexpr const char* paramCompMakeup = "compMakeup";
+    static constexpr const char* paramCompMix = "compMix";
+
+    static constexpr const char* paramDelayEnabled = "delayEnabled";
+    static constexpr const char* paramDelayTime = "delayTime";
+    static constexpr const char* paramDelayFeedback = "delayFeedback";
+    static constexpr const char* paramDelayDamping = "delayDamping";
+    static constexpr const char* paramDelayMix = "delayMix";
+    static constexpr const char* paramDelayPingPong = "delayPingPong";
+
+    static constexpr const char* paramReverbEnabled = "reverbEnabled";
+    static constexpr const char* paramReverbSize = "reverbSize";
+    static constexpr const char* paramReverbDamping = "reverbDamping";
+    static constexpr const char* paramReverbWidth = "reverbWidth";
+    static constexpr const char* paramReverbMix = "reverbMix";
+
+    static constexpr const char* paramFxOrder0 = "fxOrder0";
+    static constexpr const char* paramFxOrder1 = "fxOrder1";
+    static constexpr const char* paramFxOrder2 = "fxOrder2";
+    static constexpr const char* paramFxOrder3 = "fxOrder3";
+
+    EffectChain& getEffectChain() noexcept { return effectChain; }
 
 private:
     void updateRealtimeParameters();
@@ -68,9 +154,12 @@ private:
     PitchTracker pitchTracker;
     EnvelopeFollower envelopeFollower;
     SynthEngine synthEngine;
+    EffectChain effectChain;
 
     juce::dsp::IIR::Filter<float> highPassFilter;
     juce::dsp::ProcessSpec spec {};
+
+    int currentProgram = 0;
 
     std::atomic<float> displayedFrequency { 0.0f };
     std::atomic<float> displayedConfidence { 0.0f };
