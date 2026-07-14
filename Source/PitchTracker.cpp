@@ -19,6 +19,7 @@ void PitchTracker::reset()
     lastConfidence = 0.0f;
     voiced = false;
     hangoffHopsRemaining = 0;
+    clearPendingPitch();
 }
 
 float PitchTracker::getMinConfidenceThreshold() const noexcept
@@ -32,6 +33,47 @@ void PitchTracker::clearVoicing() noexcept
     smoothedFrequency = 0.0f;
     lastConfidence = 0.0f;
     hangoffHopsRemaining = 0;
+    clearPendingPitch();
+}
+
+void PitchTracker::clearPendingPitch() noexcept
+{
+    pendingFrequency = 0.0f;
+    pendingConfirmCount = 0;
+}
+
+bool PitchTracker::pitchesAgree (float aHz, float bHz, float toleranceCents) const noexcept
+{
+    if (aHz <= 0.0f || bHz <= 0.0f)
+        return false;
+
+    const float cents = std::abs (1200.0f * std::log2 (aHz / bHz));
+    return cents <= toleranceCents;
+}
+
+int PitchTracker::requiredConfirmHops (float candidateHz, float referenceHz) const noexcept
+{
+    if (referenceHz <= minFrequency * 0.5f)
+        return 2; // first lock after silence — skip attack spike
+
+    const float ratio = candidateHz / referenceHz;
+    const float semitones = std::abs (12.0f * std::log2 (juce::jmax (ratio, 1.0e-6f)));
+
+    if (semitones < 0.7f)
+        return 1; // small vibrato / bend — accept immediately
+
+    const bool downward = candidateHz < referenceHz;
+
+    // Octave-scale errors need more confirmation, especially downward pluck spikes.
+    if (ratio > 0.45f && ratio < 0.58f)
+        return 5; // octave down
+    if (ratio > 1.72f && ratio < 2.25f)
+        return 2; // octave up — recover quickly from a low lock
+
+    if (downward)
+        return semitones > 3.0f ? 4 : 3;
+
+    return semitones > 3.0f ? 3 : 2;
 }
 
 void PitchTracker::flush() noexcept
@@ -393,7 +435,6 @@ void PitchTracker::runAnalysis()
                        && confidence >= minConfidence;
 
     // Soft temporal consistency: reject large non-octave jumps only when confidence is weak.
-    // Octave jumps in either direction are allowed (NN already scored against previous Hz).
     if (detectedVoiced && smoothedFrequency > minFrequency * 0.5f)
     {
         const float ratio = detected / smoothedFrequency;
@@ -410,6 +451,72 @@ void PitchTracker::runAnalysis()
     }
 
     detectedVoiced = detected >= minFrequency
+                  && detected <= maxFrequency
+                  && confidence >= minConfidence;
+
+    if (detectedVoiced)
+    {
+        const bool hasStablePitch = smoothedFrequency > minFrequency * 0.5f;
+        const int hopsNeeded = hasStablePitch ? requiredConfirmHops (detected, smoothedFrequency)
+                                              : 2; // first lock: ignore attack-frame spikes
+
+        if (hopsNeeded <= 1)
+        {
+            clearPendingPitch();
+        }
+        else
+        {
+            if (pendingFrequency > 0.0f && pitchesAgree (detected, pendingFrequency))
+            {
+                ++pendingConfirmCount;
+                pendingFrequency = 0.65f * pendingFrequency + 0.35f * detected;
+
+                if (pendingConfirmCount < hopsNeeded)
+                {
+                    // Hold previous stable pitch through pluck / transition spikes.
+                    if (hasStablePitch)
+                    {
+                        detected = smoothedFrequency;
+                        confidence = juce::jmax (previousConfidence * 0.95f, minConfidence);
+                        lastConfidence = confidence;
+                    }
+                    else
+                    {
+                        // First lock still pending — stay unvoiced for this hop.
+                        detectedVoiced = false;
+                    }
+                }
+                else
+                {
+                    detected = pendingFrequency;
+                    clearPendingPitch();
+                }
+            }
+            else
+            {
+                pendingFrequency = detected;
+                pendingConfirmCount = 1;
+
+                if (hasStablePitch)
+                {
+                    detected = smoothedFrequency;
+                    confidence = juce::jmax (previousConfidence * 0.95f, minConfidence);
+                    lastConfidence = confidence;
+                }
+                else
+                {
+                    detectedVoiced = false;
+                }
+            }
+        }
+    }
+    else
+    {
+        clearPendingPitch();
+    }
+
+    detectedVoiced = detectedVoiced
+                  && detected >= minFrequency
                   && detected <= maxFrequency
                   && confidence >= minConfidence;
 
@@ -449,12 +556,22 @@ void PitchTracker::runAnalysis()
         voiced = lastConfidence >= minConfidence * 0.55f;
 
         if (! voiced)
+        {
             smoothedFrequency = 0.0f;
+            clearPendingPitch();
+        }
+    }
+    else if (pendingConfirmCount > 0 && pendingFrequency > 0.0f)
+    {
+        // Waiting on first-lock confirmation — keep pending, stay unvoiced.
+        voiced = false;
+        smoothedFrequency = 0.0f;
     }
     else
     {
         voiced = false;
         smoothedFrequency = 0.0f;
         hangoffHopsRemaining = 0;
+        clearPendingPitch();
     }
 }

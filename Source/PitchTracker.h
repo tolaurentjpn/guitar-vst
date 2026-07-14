@@ -45,6 +45,9 @@ private:
                                 float prevHz, float rms, float contrast,
                                 float* features) const;
     void frameStats (const float* data, int numSamples, float& rms, float& contrast) const;
+    void clearPendingPitch() noexcept;
+    int requiredConfirmHops (float candidateHz, float referenceHz) const noexcept;
+    bool pitchesAgree (float aHz, float bHz, float toleranceCents = 60.0f) const noexcept;
     void runAnalysis();
 
     double sampleRate = 44100.0;
@@ -63,6 +66,10 @@ private:
     float lastConfidence = 0.0f;
     bool voiced = false;
     int hangoffHopsRemaining = 0;
+
+    // Hold large pitch jumps (esp. downward / octave-low pluck spikes) until stable.
+    float pendingFrequency = 0.0f;
+    int pendingConfirmCount = 0;
 
     static constexpr int maxHangoffHops = 10;
 

@@ -155,6 +155,31 @@ int main()
                     tracker.getFrequency() > 190.0f && tracker.getFrequency() < 250.0f);
     }
 
+    // Brief octave-low spike while holding A3 must not pull the reported pitch down.
+    {
+        PitchTracker tracker;
+        tracker.prepare (sampleRate);
+        tracker.setHopSize (tracker.getWindowSize()); // one analysis per full window
+        int sampleIndex = 0;
+        const int window = tracker.getWindowSize();
+
+        feedTone (tracker, sampleRate, 220.0f, window * 4, sampleIndex);
+        expectTrue ("Spike test baseline is A3",
+                    tracker.getFrequency() > 190.0f && tracker.getFrequency() < 250.0f);
+
+        float minHz = tracker.getFrequency();
+        // Two wrong frames — below the 5-hop octave-down confirmation threshold.
+        feedTone (tracker, sampleRate, 110.0f, window * 2, sampleIndex);
+        minHz = juce::jmin (minHz, tracker.getFrequency());
+        feedTone (tracker, sampleRate, 220.0f, window * 2, sampleIndex);
+        minHz = juce::jmin (minHz, tracker.getFrequency());
+
+        expectTrue ("Brief A2 spike while holding A3 does not pull pitch octave-low",
+                    minHz > 180.0f);
+        expectTrue ("Recovered A3 after brief spike",
+                    tracker.getFrequency() > 190.0f && tracker.getFrequency() < 250.0f);
+    }
+
     std::cout << "Open A: " << openA << " Hz\n";
     std::cout << "12th fret A: " << twelfthFretA << " Hz\n";
     std::cout << "Open E: " << openE << " Hz\n";
