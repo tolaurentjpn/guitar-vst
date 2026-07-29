@@ -1,18 +1,22 @@
 # Guitar Synth
 
-Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar input in real time and drives a dual-oscillator subtractive synthesizer with unison, filter envelopes, a reorderable FX rack, and factory presets.
+Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar input in real time and drives a dual-oscillator subtractive synthesizer with unison, PWM, sub/noise, filter envelopes, a pro-style arpeggiator, a dedicated chorus, a reorderable FX rack, and factory presets (including cinematic Zimmer and Jupiter-8 characters).
 
 ## Features
 
 - Hybrid pitch tracking: YIN period discovery + a tiny neural net for octave / voicing decisions (80 Hz – 1200 Hz)
 - Frequency-direct oscillator control (no MIDI note quantization delay)
 - Input gate / envelope follower with ADSR release on note-off (no hard mute cut)
-- Dual oscillators (sine / saw / square) with per-osc low-pass filter and amp ADSR
+- **Pick-attack retrigger**: successive plucks of the same fretted note re-attack the synth (eighths / sixteenths) without waiting for the gate to close
+- Dual oscillators (sine / saw / square / triangle) with pulse-width on square, per-osc low-pass filter, and amp ADSR
+- Sub oscillator (−1 octave) and noise bed mixed into Osc 1 before its filter
 - Vital-style **unison** per oscillator: Voices (1–8), Detune, Stereo Spread, Blend, Phase Random
-- Per-filter **ADSR envelopes** with Amount, edited as draggable plots on the Filter Env tab
-- Dual LFOs (rate, shape, cutoff / resonance / pitch / amp modulation)
+- Per-filter **ADSR envelopes** with Amount, edited as draggable plots on the Filter Env tab (attacks up to 5 s for cinematic blooms)
+- Dual LFOs (rate, shape, cutoff / resonance / pitch / amp / PWM modulation)
+- Gate-driven **arpeggiator** (chord from tracked root, octaves, modes, rate/sync, gate %, latch)
+- Dedicated **chorus** (ensemble) stage before the FX rack
 - Reorderable **FX rack** (Distortion, Compressor, Delay, Reverb) on the synth output — not on the guitar input
-- Factory **presets** (Init, basses, leads, SuperSaw, pad, pluck, keys, organ, filter sweep) programmed with dual-osc, LFO, filter env, and FX-rack settings
+- Factory **presets** including basses, leads, SuperSaw, pads, pluck, keys, organ, filter sweep, plus **Zimmer Brass**, **Zimmer Pad**, **Jupiter Brass**, and **Jupiter Strings**
 - Live pitch display (Hz + note name), confidence meter, voiced indicator, latency readout
 - Formats: **VST3**, **AU**, and **Standalone**
 
@@ -37,6 +41,7 @@ Typical end-to-end latency at 48 kHz with a 128-sample buffer:
 6. Disable direct monitoring on your audio interface if you hear a dry double.
 7. Use a relatively clean guitar signal; heavy distortion makes tracking harder.
 8. Adjust **Gate** (default -48 dB) and **Tracking** knobs if notes fail to trigger, or if you hear synth output while idle. Raise Gate toward -40 dB if the gate opens on interface noise.
+9. Use **Retrigger** (default mid) so repeated picks of the same note re-attack the synth. Raise it if soft re-picks are missed; lower it (or set to 0 to disable) if you get double triggers from one pluck.
 
 Run the automated checks after building:
 
@@ -102,17 +107,21 @@ Rebuild the plugin after regenerating weights.
 
 | Parameter | Description |
 |-----------|-------------|
-| Waveform (Osc 1 / 2) | Sine, saw, or square |
+| Waveform (Osc 1 / 2) | Sine, saw, square, or triangle |
+| Pulse Width (Osc 1 / 2) | Square duty cycle (PWM); ignored for other waves |
+| Sub / Noise | −1 octave sub level and noise bed into Osc 1 |
 | Osc 2 Mix / Octave / Detune | Second oscillator balance and pitch offset |
 | Voices / Unison Detune / Spread / Blend | Per-oscillator unison stack (1–8 voices) |
 | Cutoff / Resonance | Per-osc low-pass filter |
-| Amp ADSR | Per-osc amplitude envelope |
+| Amp ADSR | Per-osc amplitude envelope (attack up to 5 s) |
 | Filter Env ADSR + Amount | Per-filter envelope (plot editor); Amount opens/closes cutoff |
 | Glide | Portamento between detected pitches |
 | Master | Output level |
 | Tracking | Pitch confidence threshold (higher = stricter) |
 | Gate | Input level threshold in dB |
-| LFO 1 / 2 | Rate, shape, and destinations (cutoff, resonance, pitch, amp) |
+| LFO 1 / 2 | Rate, shape, and destinations (cutoff, resonance, pitch, amp, PWM) |
+| Arpeggiator | On/Sync/Latch, rate or host division, gate %, mode, octaves, chord type |
+| Chorus | Pre-rack ensemble (enable, rate, depth, mix) |
 | Distortion / Compressor / Delay / Reverb | Post-synth FX rack (enable, mix, and effect-specific controls); drag cards or use arrow buttons to reorder |
 | FX Order | Chain order of the four effects (defaults Dist → Comp → Delay → Reverb) |
 

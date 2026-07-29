@@ -58,6 +58,8 @@ GuitarLookAndFeel::GuitarLookAndFeel()
     btnSawOn = loadBinaryImage (BinaryData::btn_saw_on_png, BinaryData::btn_saw_on_pngSize);
     btnSquare = loadBinaryImage (BinaryData::btn_square_png, BinaryData::btn_square_pngSize);
     btnSquareOn = loadBinaryImage (BinaryData::btn_square_on_png, BinaryData::btn_square_on_pngSize);
+    btnTriangle = loadBinaryImage (BinaryData::btn_triangle_png, BinaryData::btn_triangle_pngSize);
+    btnTriangleOn = loadBinaryImage (BinaryData::btn_triangle_on_png, BinaryData::btn_triangle_on_pngSize);
     ledOn = loadBinaryImage (BinaryData::led_on_png, BinaryData::led_on_pngSize);
     ledOff = loadBinaryImage (BinaryData::led_off_png, BinaryData::led_off_pngSize);
 
@@ -84,7 +86,9 @@ juce::Image GuitarLookAndFeel::getWaveformButtonImage (int waveformIndex, bool a
     {
         case 0:  return active ? btnSineOn : btnSine;
         case 1:  return active ? btnSawOn : btnSaw;
-        default: return active ? btnSquareOn : btnSquare;
+        case 2:  return active ? btnSquareOn : btnSquare;
+        case 3:  return active ? btnTriangleOn : btnTriangle;
+        default: return active ? btnSawOn : btnSaw;
     }
 }
 

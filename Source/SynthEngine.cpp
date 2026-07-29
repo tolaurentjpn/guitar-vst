@@ -1,6 +1,11 @@
 #include "SynthEngine.h"
 #include <cmath>
 
+namespace
+{
+    constexpr float kNoiseLpHz = 3000.0f;
+}
+
 void SynthEngine::AmpEnvelope::advance() noexcept
 {
     switch (stage)
@@ -36,18 +41,70 @@ void SynthEngine::AmpEnvelope::advance() noexcept
     }
 }
 
-float SynthEngine::renderWave (WaveformType type, float phase) noexcept
+float SynthEngine::polyBlep (float t, float dt) noexcept
+{
+    if (dt <= 0.0f)
+        return 0.0f;
+
+    if (t < dt)
+    {
+        t /= dt;
+        return t + t - t * t - 1.0f;
+    }
+
+    if (t > 1.0f - dt)
+    {
+        t = (t - 1.0f) / dt;
+        return t * t + t + t + 1.0f;
+    }
+
+    return 0.0f;
+}
+
+float SynthEngine::renderSquareBlep (float phase01, float dt, float pulseWidth) noexcept
+{
+    float value = phase01 < pulseWidth ? 1.0f : -1.0f;
+    value += polyBlep (phase01, dt);
+
+    float t2 = phase01 - pulseWidth;
+    if (t2 < 0.0f)
+        t2 += 1.0f;
+    value -= polyBlep (t2, dt);
+    return value;
+}
+
+float SynthEngine::renderWave (WaveformType type, float phase01, float dt,
+                               float pulseWidth, float& triState) noexcept
 {
     switch (type)
     {
         case WaveformType::sine:
-            return std::sin (phase);
+            return std::sin (juce::MathConstants<float>::twoPi * phase01);
+
         case WaveformType::saw:
-            return phase / juce::MathConstants<float>::pi;
+        {
+            float value = 2.0f * phase01 - 1.0f;
+            value -= polyBlep (phase01, dt);
+            return value;
+        }
+
+        case WaveformType::triangle:
+        {
+            // Bandlimited triangle via leaky integration of a 50% PolyBLEP square.
+            const float square = renderSquareBlep (phase01, dt, 0.5f);
+            triState = dt * square + (1.0f - dt) * triState;
+            return juce::jlimit (-1.0f, 1.0f, triState * 4.0f);
+        }
+
         case WaveformType::square:
         default:
-            return phase < 0.0f ? -1.0f : 1.0f;
+            return renderSquareBlep (phase01, dt, pulseWidth);
     }
+}
+
+float SynthEngine::modulatedPulseWidth (float baseWidth, float lfoAmount, float lfoValue) noexcept
+{
+    return juce::jlimit (0.05f, 0.5f, baseWidth + 0.4f * lfoAmount * lfoValue);
 }
 
 float SynthEngine::voiceDetuneCents (int voiceIndex, int numVoices, float maxDetuneCents) noexcept
@@ -79,6 +136,12 @@ float SynthEngine::voiceBlendGain (int voiceIndex, int numVoices, float blend01)
     return juce::jmap (blend01, centerWeight, edgeWeight * 0.85f + 0.15f);
 }
 
+void SynthEngine::updateNoiseFilterCoeff() noexcept
+{
+    const float sr = static_cast<float> (juce::jmax (1.0, sampleRate));
+    noiseLpCoeff = std::exp (-juce::MathConstants<float>::twoPi * kNoiseLpHz / sr);
+}
+
 void SynthEngine::prepare (double newSampleRate, int maximumBlockSize)
 {
     juce::ignoreUnused (maximumBlockSize);
@@ -97,6 +160,7 @@ void SynthEngine::prepare (double newSampleRate, int maximumBlockSize)
     filter2.setCutoffFrequency (osc2CutoffHz);
     filter2.setResonance (osc2Resonance);
 
+    updateNoiseFilterCoeff();
     lfo1.prepare (sampleRate);
     lfo2.prepare (sampleRate);
     reset();
@@ -117,6 +181,11 @@ void SynthEngine::setOsc2Waveform (WaveformType type) { osc2Waveform = type; }
 void SynthEngine::setOsc2Mix (float mix) { osc2Mix = juce::jlimit (0.0f, 1.0f, mix); }
 void SynthEngine::setOsc2Octave (int octave) { osc2Octave = juce::jlimit (-1, 1, octave); }
 void SynthEngine::setOsc2DetuneCents (float cents) { osc2DetuneCents = juce::jlimit (-100.0f, 100.0f, cents); }
+
+void SynthEngine::setOsc1PulseWidth (float width01) { osc1PulseWidth = juce::jlimit (0.05f, 0.5f, width01); }
+void SynthEngine::setOsc2PulseWidth (float width01) { osc2PulseWidth = juce::jlimit (0.05f, 0.5f, width01); }
+void SynthEngine::setSubLevel (float level01) { subLevel = juce::jlimit (0.0f, 1.0f, level01); }
+void SynthEngine::setNoiseMix (float mix01) { noiseMix = juce::jlimit (0.0f, 1.0f, mix01); }
 
 void SynthEngine::setOsc1UnisonVoices (int voices) { osc1UnisonVoices = juce::jlimit (1, maxUnison, voices); }
 void SynthEngine::setOsc1UnisonDetune (float amount01) { osc1UnisonDetune = juce::jlimit (0.0f, 1.0f, amount01); }
@@ -167,6 +236,7 @@ void SynthEngine::setLfo1FilterAmount (float amount) { lfo1FilterAmount = juce::
 void SynthEngine::setLfo1ResonanceAmount (float amount) { lfo1ResonanceAmount = juce::jlimit (-1.0f, 1.0f, amount); }
 void SynthEngine::setLfo1PitchAmount (float amount) { lfo1PitchAmount = juce::jlimit (-1.0f, 1.0f, amount); }
 void SynthEngine::setLfo1AmpAmount (float amount) { lfo1AmpAmount = juce::jlimit (-1.0f, 1.0f, amount); }
+void SynthEngine::setLfo1PwmAmount (float amount) { lfo1PwmAmount = juce::jlimit (-1.0f, 1.0f, amount); }
 
 void SynthEngine::setLfo2Enabled (bool enabled) { lfo2Enabled = enabled; }
 void SynthEngine::setLfo2Rate (float hz) { lfo2.setRateHz (hz); }
@@ -175,6 +245,7 @@ void SynthEngine::setLfo2FilterAmount (float amount) { lfo2FilterAmount = juce::
 void SynthEngine::setLfo2ResonanceAmount (float amount) { lfo2ResonanceAmount = juce::jlimit (-1.0f, 1.0f, amount); }
 void SynthEngine::setLfo2PitchAmount (float amount) { lfo2PitchAmount = juce::jlimit (-1.0f, 1.0f, amount); }
 void SynthEngine::setLfo2AmpAmount (float amount) { lfo2AmpAmount = juce::jlimit (-1.0f, 1.0f, amount); }
+void SynthEngine::setLfo2PwmAmount (float amount) { lfo2PwmAmount = juce::jlimit (-1.0f, 1.0f, amount); }
 
 bool SynthEngine::isIdle() const noexcept
 {
@@ -183,10 +254,12 @@ bool SynthEngine::isIdle() const noexcept
 
 void SynthEngine::resetOscStack (std::array<PhaseOsc, maxUnison>& stack, float phaseRandom01)
 {
-    std::uniform_real_distribution<float> dist (-juce::MathConstants<float>::pi,
-                                                juce::MathConstants<float>::pi);
+    std::uniform_real_distribution<float> dist (0.0f, 1.0f);
     for (auto& osc : stack)
+    {
         osc.phase = phaseRandom01 > 0.0f ? dist (rng) * phaseRandom01 : 0.0f;
+        osc.triState = 0.0f;
+    }
 }
 
 void SynthEngine::resetUnisonPhases (bool randomizeOsc1, bool randomizeOsc2)
@@ -205,6 +278,8 @@ void SynthEngine::hardMute() noexcept
     filterEnv1.hardReset();
     filterEnv2.hardReset();
     resetUnisonPhases (true, true);
+    subPhase = 0.0f;
+    noiseLpState = 0.0f;
     filter1.reset();
     filter2.reset();
 }
@@ -269,6 +344,19 @@ void SynthEngine::setPitchState (float hz, bool trackingActive)
     }
 }
 
+void SynthEngine::retrigger() noexcept
+{
+    if (isIdle())
+        return;
+
+    env1.stage = EnvStage::attack;
+    env2.stage = EnvStage::attack;
+    filterEnv1.stage = EnvStage::attack;
+    filterEnv2.stage = EnvStage::attack;
+    resetUnisonPhases (true, true);
+    activeVoiced = true;
+}
+
 float SynthEngine::clampCutoff (float hz) const noexcept
 {
     return juce::jlimit (20.0f, static_cast<float> (sampleRate * 0.45), hz);
@@ -321,8 +409,10 @@ void SynthEngine::processSample (float& left, float& right) noexcept
 
     const float osc1AmpScale = juce::jlimit (0.0f, 1.5f, 1.0f + 0.8f * lfo1AmpAmount * lfo1Value);
     const float osc2AmpScale = juce::jlimit (0.0f, 1.5f, 1.0f + 0.8f * lfo2AmpAmount * lfo2Value);
+    const float osc1Pulse = modulatedPulseWidth (osc1PulseWidth, lfo1PwmAmount, lfo1Value);
+    const float osc2Pulse = modulatedPulseWidth (osc2PulseWidth, lfo2PwmAmount, lfo2Value);
 
-    renderSample (osc1BaseFreq, osc2BaseFreq, osc1AmpScale, osc2AmpScale, left, right);
+    renderSample (osc1BaseFreq, osc2BaseFreq, osc1AmpScale, osc2AmpScale, osc1Pulse, osc2Pulse, left, right);
 }
 
 void SynthEngine::processBlock (juce::AudioBuffer<float>& buffer, const float* gateEnvelope, int numSamples)
@@ -342,6 +432,7 @@ void SynthEngine::processBlock (juce::AudioBuffer<float>& buffer, const float* g
 
 void SynthEngine::renderSample (float osc1BaseFreq, float osc2BaseFreq,
                                 float osc1AmpScale, float osc2AmpScale,
+                                float osc1Pulse, float osc2Pulse,
                                 float& left, float& right) noexcept
 {
     env1.advance();
@@ -355,9 +446,7 @@ void SynthEngine::renderSample (float osc1BaseFreq, float osc2BaseFreq,
         return;
     }
 
-    const float twoPi = juce::MathConstants<float>::twoPi;
-    const float pi = juce::MathConstants<float>::pi;
-    const float phaseIncScale = twoPi / static_cast<float> (sampleRate);
+    const float sr = static_cast<float> (sampleRate);
     const float nyquistLimit = static_cast<float> (sampleRate * 0.45);
 
     const float osc1DetuneCentsMax = osc1UnisonDetune * 200.0f;
@@ -370,11 +459,12 @@ void SynthEngine::renderSample (float osc1BaseFreq, float osc2BaseFreq,
     {
         const float cents = voiceDetuneCents (v, osc1UnisonVoices, osc1DetuneCentsMax);
         const float freq = juce::jlimit (20.0f, nyquistLimit, osc1BaseFreq * std::exp2 (cents / 1200.0f));
+        const float dt = freq / sr;
         auto& osc = osc1Stack[static_cast<size_t> (v)];
-        const float sample = renderWave (waveform, osc.phase);
-        osc.phase += freq * phaseIncScale;
-        while (osc.phase > pi) osc.phase -= twoPi;
-        while (osc.phase < -pi) osc.phase += twoPi;
+        const float sample = renderWave (waveform, osc.phase, dt, osc1Pulse, osc.triState);
+        osc.phase += dt;
+        if (osc.phase >= 1.0f)
+            osc.phase -= std::floor (osc.phase);
 
         const float gain = voiceBlendGain (v, osc1UnisonVoices, osc1UnisonBlend) * osc1Norm;
         const float pan = voicePan (v, osc1UnisonVoices, osc1UnisonSpread);
@@ -387,11 +477,12 @@ void SynthEngine::renderSample (float osc1BaseFreq, float osc2BaseFreq,
     {
         const float cents = voiceDetuneCents (v, osc2UnisonVoices, osc2DetuneCentsMax);
         const float freq = juce::jlimit (20.0f, nyquistLimit, osc2BaseFreq * std::exp2 (cents / 1200.0f));
+        const float dt = freq / sr;
         auto& osc = osc2Stack[static_cast<size_t> (v)];
-        const float sample = renderWave (osc2Waveform, osc.phase);
-        osc.phase += freq * phaseIncScale;
-        while (osc.phase > pi) osc.phase -= twoPi;
-        while (osc.phase < -pi) osc.phase += twoPi;
+        const float sample = renderWave (osc2Waveform, osc.phase, dt, osc2Pulse, osc.triState);
+        osc.phase += dt;
+        if (osc.phase >= 1.0f)
+            osc.phase -= std::floor (osc.phase);
 
         const float gain = voiceBlendGain (v, osc2UnisonVoices, osc2UnisonBlend) * osc2Norm;
         const float pan = voicePan (v, osc2UnisonVoices, osc2UnisonSpread);
@@ -399,8 +490,18 @@ void SynthEngine::renderSample (float osc1BaseFreq, float osc2BaseFreq,
         stack2R += sample * gain * (0.5f * (1.0f + pan));
     }
 
-    // One filter per osc on mono sum; restore stereo with pre-filter L/R magnitude weights.
-    const float mono1 = stack1L + stack1R;
+    // Bandlimited sub (−1 octave square) + LP-filtered noise into Osc 1 mono sum.
+    const float subFreq = juce::jlimit (20.0f, nyquistLimit, osc1BaseFreq * 0.5f);
+    const float subDt = subFreq / sr;
+    const float subSample = renderSquareBlep (subPhase, subDt, 0.5f);
+    subPhase += subDt;
+    if (subPhase >= 1.0f)
+        subPhase -= std::floor (subPhase);
+
+    const float white = noiseDist (rng);
+    noiseLpState = (1.0f - noiseLpCoeff) * white + noiseLpCoeff * noiseLpState;
+
+    const float mono1 = stack1L + stack1R + subLevel * subSample + noiseMix * noiseLpState;
     const float mono2 = stack2L + stack2R;
     const float filtered1 = filter1.processSample (0, mono1 * osc1AmpScale) * env1.value;
     const float filtered2 = filter2.processSample (0, mono2 * osc2AmpScale) * env2.value;

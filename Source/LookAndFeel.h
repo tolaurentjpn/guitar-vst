@@ -55,6 +55,8 @@ private:
     juce::Image btnSawOn;
     juce::Image btnSquare;
     juce::Image btnSquareOn;
+    juce::Image btnTriangle;
+    juce::Image btnTriangleOn;
     juce::Image ledOn;
     juce::Image ledOff;
 };

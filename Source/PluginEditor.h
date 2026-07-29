@@ -40,6 +40,9 @@ private:
     void syncOctaveButtons();
     void syncLfoShapeButtons (int lfoIndex);
     void syncDistModeButtons();
+    void syncArpModeButtons();
+    void syncArpChordButtons();
+    void syncArpDivisionButtons();
     void syncPresetCombo();
     void syncFxDetailVisibility();
     void placeKnob (juce::Rectangle<int> area, juce::Slider& slider, juce::Label& label);
@@ -78,6 +81,7 @@ private:
     juce::Label osc1EnvelopeLabel;
     juce::Label osc2EnvelopeLabel;
     juce::Label playSectionLabel;
+    juce::Label arpSectionLabel;
     juce::Label lfo1SectionLabel;
     juce::Label lfo2SectionLabel;
     juce::Label octaveLabel;
@@ -102,9 +106,11 @@ private:
     juce::ImageButton sineButton;
     juce::ImageButton sawButton;
     juce::ImageButton squareButton;
+    juce::ImageButton triangleButton;
     juce::ImageButton osc2SineButton;
     juce::ImageButton osc2SawButton;
     juce::ImageButton osc2SquareButton;
+    juce::ImageButton osc2TriangleButton;
 
     juce::TextButton octaveDownButton { "-1" };
     juce::TextButton octaveZeroButton { "0" };
@@ -122,6 +128,28 @@ private:
     juce::TextButton lfo2EnableButton { "On" };
     juce::TextButton adsrSyncButton { "Sync" };
     juce::TextButton filterEnvSyncButton { "Sync" };
+    juce::TextButton chorusEnableButton { "On" };
+
+    juce::TextButton arpEnableButton { "On" };
+    juce::TextButton arpSyncButton { "Sync" };
+    juce::TextButton arpLatchButton { "Latch" };
+    juce::TextButton arpModeUpButton { "Up" };
+    juce::TextButton arpModeDownButton { "Down" };
+    juce::TextButton arpModeUpDownButton { "UpDn" };
+    juce::TextButton arpModeRandomButton { "Rnd" };
+    juce::TextButton arpChordNoteButton { "Note" };
+    juce::TextButton arpChordMajorButton { "Maj" };
+    juce::TextButton arpChordMinorButton { "Min" };
+    juce::TextButton arpChordMaj7Button { "M7" };
+    juce::TextButton arpChordMin7Button { "m7" };
+    juce::TextButton arpChordSus2Button { "Sus2" };
+    juce::TextButton arpChordSus4Button { "Sus4" };
+    juce::TextButton arpDivQuarterButton { "1/4" };
+    juce::TextButton arpDivEighthButton { "1/8" };
+    juce::TextButton arpDivEighthTButton { "1/8T" };
+    juce::TextButton arpDivSixteenthButton { "1/16" };
+    juce::TextButton arpDivSixteenthTButton { "1/16T" };
+    juce::TextButton arpDivThirtySecondButton { "1/32" };
 
     juce::TextButton distSoftButton { "Soft" };
     juce::TextButton distHardButton { "Hard" };
@@ -130,6 +158,10 @@ private:
 
     juce::Slider osc2MixSlider;
     juce::Slider osc2DetuneSlider;
+    juce::Slider osc1PulseWidthSlider;
+    juce::Slider osc2PulseWidthSlider;
+    juce::Slider subLevelSlider;
+    juce::Slider noiseMixSlider;
     juce::Slider osc1UnisonVoicesSlider;
     juce::Slider osc1UnisonDetuneSlider;
     juce::Slider osc1UnisonSpreadSlider;
@@ -154,19 +186,28 @@ private:
     juce::Slider masterSlider;
     juce::Slider trackingSlider;
     juce::Slider gateSlider;
+    juce::Slider retriggerSlider;
+    juce::Slider arpRateSlider;
+    juce::Slider arpGateSlider;
+    juce::Slider arpOctavesSlider;
     juce::Slider lfo1RateSlider;
     juce::Slider lfo1FilterSlider;
     juce::Slider lfo1ResonanceSlider;
     juce::Slider lfo1PitchSlider;
     juce::Slider lfo1AmpSlider;
+    juce::Slider lfo1PwmSlider;
     juce::Slider lfo2RateSlider;
     juce::Slider lfo2FilterSlider;
     juce::Slider lfo2ResonanceSlider;
     juce::Slider lfo2PitchSlider;
     juce::Slider lfo2AmpSlider;
+    juce::Slider lfo2PwmSlider;
     juce::Slider filterEnv1AmountSlider;
     juce::Slider filterEnv2AmountSlider;
 
+    juce::Slider chorusRateSlider;
+    juce::Slider chorusDepthSlider;
+    juce::Slider chorusMixSlider;
     juce::Slider distDriveSlider;
     juce::Slider distToneSlider;
     juce::Slider distMixSlider;
@@ -187,6 +228,10 @@ private:
 
     juce::Label osc2MixLabel;
     juce::Label osc2DetuneLabel;
+    juce::Label osc1PulseWidthLabel;
+    juce::Label osc2PulseWidthLabel;
+    juce::Label subLevelLabel;
+    juce::Label noiseMixLabel;
     juce::Label osc1UnisonVoicesLabel;
     juce::Label osc1UnisonDetuneLabel;
     juce::Label osc1UnisonSpreadLabel;
@@ -211,19 +256,32 @@ private:
     juce::Label masterLabel;
     juce::Label trackingLabel;
     juce::Label gateLabel;
+    juce::Label retriggerLabel;
+    juce::Label arpRateLabel;
+    juce::Label arpGateLabel;
+    juce::Label arpOctavesLabel;
+    juce::Label arpModeLabel;
+    juce::Label arpChordLabel;
+    juce::Label arpDivisionLabel;
     juce::Label lfo1RateLabel;
     juce::Label lfo1FilterLabel;
     juce::Label lfo1ResonanceLabel;
     juce::Label lfo1PitchLabel;
     juce::Label lfo1AmpLabel;
+    juce::Label lfo1PwmLabel;
     juce::Label lfo2RateLabel;
     juce::Label lfo2FilterLabel;
     juce::Label lfo2ResonanceLabel;
     juce::Label lfo2PitchLabel;
     juce::Label lfo2AmpLabel;
+    juce::Label lfo2PwmLabel;
     juce::Label filterEnv1AmountLabel;
     juce::Label filterEnv2AmountLabel;
 
+    juce::Label chorusSectionLabel;
+    juce::Label chorusRateLabel;
+    juce::Label chorusDepthLabel;
+    juce::Label chorusMixLabel;
     juce::Label fxDetailTitleLabel;
     juce::Label distDriveLabel;
     juce::Label distToneLabel;
@@ -252,6 +310,10 @@ private:
 
     std::unique_ptr<SliderAttachment> osc2MixAttachment;
     std::unique_ptr<SliderAttachment> osc2DetuneAttachment;
+    std::unique_ptr<SliderAttachment> osc1PulseWidthAttachment;
+    std::unique_ptr<SliderAttachment> osc2PulseWidthAttachment;
+    std::unique_ptr<SliderAttachment> subLevelAttachment;
+    std::unique_ptr<SliderAttachment> noiseMixAttachment;
     std::unique_ptr<SliderAttachment> osc1UnisonVoicesAttachment;
     std::unique_ptr<SliderAttachment> osc1UnisonDetuneAttachment;
     std::unique_ptr<SliderAttachment> osc1UnisonSpreadAttachment;
@@ -276,23 +338,36 @@ private:
     std::unique_ptr<SliderAttachment> masterAttachment;
     std::unique_ptr<SliderAttachment> trackingAttachment;
     std::unique_ptr<SliderAttachment> gateAttachment;
+    std::unique_ptr<SliderAttachment> retriggerAttachment;
+    std::unique_ptr<SliderAttachment> arpRateAttachment;
+    std::unique_ptr<SliderAttachment> arpGateAttachment;
+    std::unique_ptr<SliderAttachment> arpOctavesAttachment;
+    std::unique_ptr<ButtonAttachment> arpEnableAttachment;
+    std::unique_ptr<ButtonAttachment> arpSyncAttachment;
+    std::unique_ptr<ButtonAttachment> arpLatchAttachment;
     std::unique_ptr<SliderAttachment> lfo1RateAttachment;
     std::unique_ptr<SliderAttachment> lfo1FilterAttachment;
     std::unique_ptr<SliderAttachment> lfo1ResonanceAttachment;
     std::unique_ptr<SliderAttachment> lfo1PitchAttachment;
     std::unique_ptr<SliderAttachment> lfo1AmpAttachment;
+    std::unique_ptr<SliderAttachment> lfo1PwmAttachment;
     std::unique_ptr<SliderAttachment> lfo2RateAttachment;
     std::unique_ptr<SliderAttachment> lfo2FilterAttachment;
     std::unique_ptr<SliderAttachment> lfo2ResonanceAttachment;
     std::unique_ptr<SliderAttachment> lfo2PitchAttachment;
     std::unique_ptr<SliderAttachment> lfo2AmpAttachment;
+    std::unique_ptr<SliderAttachment> lfo2PwmAttachment;
     std::unique_ptr<SliderAttachment> filterEnv1AmountAttachment;
     std::unique_ptr<SliderAttachment> filterEnv2AmountAttachment;
     std::unique_ptr<ButtonAttachment> lfo1EnableAttachment;
     std::unique_ptr<ButtonAttachment> lfo2EnableAttachment;
     std::unique_ptr<ButtonAttachment> adsrSyncAttachment;
     std::unique_ptr<ButtonAttachment> filterEnvSyncAttachment;
+    std::unique_ptr<ButtonAttachment> chorusEnableAttachment;
 
+    std::unique_ptr<SliderAttachment> chorusRateAttachment;
+    std::unique_ptr<SliderAttachment> chorusDepthAttachment;
+    std::unique_ptr<SliderAttachment> chorusMixAttachment;
     std::unique_ptr<SliderAttachment> distDriveAttachment;
     std::unique_ptr<SliderAttachment> distToneAttachment;
     std::unique_ptr<SliderAttachment> distMixAttachment;
@@ -324,10 +399,12 @@ private:
     juce::Rectangle<int> filterPanelBounds;
     juce::Rectangle<int> envelopePanelBounds;
     juce::Rectangle<int> playPanelBounds;
+    juce::Rectangle<int> arpPanelBounds;
     juce::Rectangle<int> lfo1PanelBounds;
     juce::Rectangle<int> lfo2PanelBounds;
     juce::Rectangle<int> filterEnv1PanelBounds;
     juce::Rectangle<int> filterEnv2PanelBounds;
+    juce::Rectangle<int> chorusPanelBounds;
     juce::Rectangle<int> fxRackBounds;
     juce::Rectangle<int> fxDetailBounds;
 

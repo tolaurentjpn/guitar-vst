@@ -5,6 +5,8 @@ void EnvelopeFollower::prepare (double newSampleRate)
 {
     sampleRate = newSampleRate;
     peakDecayCoeff = msToCoeff (15.0f, sampleRate);
+    slowEnvCoeff = msToCoeff (45.0f, sampleRate);
+    refractorySamples = juce::jmax (1, static_cast<int> (0.040 * sampleRate));
     reset();
 }
 
@@ -12,8 +14,11 @@ void EnvelopeFollower::reset()
 {
     envelope = 0.0f;
     peakHold = 0.0f;
+    slowEnvelope = 0.0f;
     gateOpen = false;
+    onsetPending = false;
     gateOutput = 0.0f;
+    samplesSinceOnset = refractorySamples;
 }
 
 void EnvelopeFollower::setAttackMs (float attackMs)
@@ -31,6 +36,20 @@ void EnvelopeFollower::setGateThreshold (float thresholdDb)
     gateThresholdLinear = dbToLinear (thresholdDb);
 }
 
+void EnvelopeFollower::setRetriggerSensitivity (float sensitivity01)
+{
+    retriggerSensitivity = juce::jlimit (0.0f, 1.0f, sensitivity01);
+}
+
+bool EnvelopeFollower::consumeOnset() noexcept
+{
+    if (! onsetPending)
+        return false;
+
+    onsetPending = false;
+    return true;
+}
+
 float EnvelopeFollower::processSample (float input) noexcept
 {
     const float rectified = std::abs (input);
@@ -41,6 +60,7 @@ float EnvelopeFollower::processSample (float input) noexcept
 
     const float openThreshold = gateThresholdLinear;
     const float closeThreshold = gateThresholdLinear * 0.35f;
+    const bool wasGateOpen = gateOpen;
 
     if (! gateOpen)
     {
@@ -53,7 +73,47 @@ float EnvelopeFollower::processSample (float input) noexcept
     {
         gateOpen = false;
         peakHold = 0.0f;
+        onsetPending = false;
     }
+
+    if (gateOpen)
+    {
+        if (! wasGateOpen)
+        {
+            // First note-on is handled by setPitchState; arm refractory so the same
+            // pick edge does not also fire a same-note retrigger.
+            samplesSinceOnset = 0;
+            onsetPending = false;
+        }
+        else if (retriggerSensitivity > 0.0f
+                 && samplesSinceOnset >= refractorySamples)
+        {
+            // Higher sensitivity => smaller rise required to count as a pick.
+            const float riseRatio = juce::jmap (retriggerSensitivity, 1.0f, 0.0f, 1.25f, 3.0f);
+            const float minDelta = juce::jmap (retriggerSensitivity, 1.0f, 0.0f, 0.015f, 0.08f);
+            const float floor = juce::jmax (openThreshold, slowEnvelope);
+            const bool ampRise = peakHold > floor * riseRatio
+                              && peakHold > slowEnvelope + minDelta;
+
+            if (ampRise)
+            {
+                onsetPending = true;
+                samplesSinceOnset = 0;
+            }
+        }
+
+        ++samplesSinceOnset;
+    }
+    else
+    {
+        samplesSinceOnset = refractorySamples;
+    }
+
+    // Slow follower trails peaks so the next pluck stands out against sustain.
+    if (peakHold > slowEnvelope)
+        slowEnvelope = peakHold;
+    else
+        slowEnvelope = peakHold + slowEnvCoeff * (slowEnvelope - peakHold);
 
     const float target = gateOpen ? 1.0f : 0.0f;
     const float gateCloseCoeff = msToCoeff (20.0f, sampleRate);

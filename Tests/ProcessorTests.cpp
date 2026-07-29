@@ -31,6 +31,20 @@ namespace
         }
     }
 
+    void fillToneAtAmplitude (juce::AudioBuffer<float>& buffer, float frequency, double sampleRate,
+                              int baseSample, float amplitude)
+    {
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float sample = amplitude * std::sin (juce::MathConstants<float>::twoPi * frequency
+                                                       * static_cast<float> (baseSample + i)
+                                                       / static_cast<float> (sampleRate));
+            buffer.setSample (0, i, sample);
+            if (buffer.getNumChannels() > 1)
+                buffer.setSample (1, i, 0.0f);
+        }
+    }
+
     void fillSilence (juce::AudioBuffer<float>& buffer)
     {
         buffer.clear();
@@ -259,14 +273,20 @@ int main()
         presetProc.setPlayConfigDetails (2, 2, sampleRate, blockSize);
         presetProc.prepareToPlay (sampleRate, blockSize);
 
-        expectTrue ("Factory preset bank has programs", presetProc.getNumPrograms() >= 10);
+        expectTrue ("Factory preset bank has programs", presetProc.getNumPrograms() >= 14);
         expectTrue ("Init program name is set", presetProc.getProgramName (0) == "Init");
         expectTrue ("SuperSaw program name is set", presetProc.getProgramName (4) == "SuperSaw");
+        expectTrue ("Zimmer Brass program name is set", presetProc.getProgramName (10) == "Zimmer Brass");
+        expectTrue ("Zimmer Pad program name is set", presetProc.getProgramName (11) == "Zimmer Pad");
+        expectTrue ("Jupiter Brass program name is set", presetProc.getProgramName (12) == "Jupiter Brass");
+        expectTrue ("Jupiter Strings program name is set", presetProc.getProgramName (13) == "Jupiter Strings");
 
         const float gateBefore = presetProc.getApvts().getRawParameterValue (
             GuitarSynthAudioProcessor::paramGateThreshold)->load();
         const float trackBefore = presetProc.getApvts().getRawParameterValue (
             GuitarSynthAudioProcessor::paramTrackingSensitivity)->load();
+        const float retriggerBefore = presetProc.getApvts().getRawParameterValue (
+            GuitarSynthAudioProcessor::paramRetriggerSensitivity)->load();
 
         presetProc.setCurrentProgram (4); // SuperSaw
 
@@ -279,6 +299,9 @@ int main()
         expectTrue ("Preset load preserves Tracking",
                     std::abs (presetProc.getApvts().getRawParameterValue (
                         GuitarSynthAudioProcessor::paramTrackingSensitivity)->load() - trackBefore) < 0.01f);
+        expectTrue ("Preset load preserves Retrigger",
+                    std::abs (presetProc.getApvts().getRawParameterValue (
+                        GuitarSynthAudioProcessor::paramRetriggerSensitivity)->load() - retriggerBefore) < 0.01f);
 
         float presetPeak = 0.0f;
         for (int block = 0; block < 30; ++block)
@@ -289,6 +312,164 @@ int main()
         }
 
         expectTrue ("SuperSaw preset produces audible output", presetPeak > 1.0e-3f);
+
+        const int cinematicPresets[] = { 10, 11, 12, 13 };
+        for (int presetIndex : cinematicPresets)
+        {
+            GuitarSynthAudioProcessor cinematicProc;
+            cinematicProc.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+            cinematicProc.prepareToPlay (sampleRate, blockSize);
+            cinematicProc.setCurrentProgram (presetIndex);
+
+            float cinematicPeak = 0.0f;
+            bool finite = true;
+            const int blocks = (presetIndex == 11) ? 120 : 40; // Zimmer Pad has multi-second attack
+            for (int block = 0; block < blocks; ++block)
+            {
+                fillTone (buffer, 220.0f, sampleRate, block * blockSize);
+                cinematicProc.processBlock (buffer, midi);
+                const float peak = bufferPeak (buffer);
+                cinematicPeak = juce::jmax (cinematicPeak, peak);
+                if (! std::isfinite (peak))
+                    finite = false;
+            }
+
+            expectTrue ("Cinematic / Jupiter preset produces finite samples", finite);
+            expectTrue ("Cinematic / Jupiter preset produces audible output", cinematicPeak > 1.0e-3f);
+        }
+
+        {
+            GuitarSynthAudioProcessor waveProc;
+            waveProc.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+            waveProc.prepareToPlay (sampleRate, blockSize);
+            auto& apvts = waveProc.getApvts();
+            if (auto* wf = apvts.getParameter (GuitarSynthAudioProcessor::paramWaveform))
+                wf->setValueNotifyingHost (wf->convertTo0to1 (3.0f)); // triangle
+            if (auto* o2 = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2Waveform))
+                o2->setValueNotifyingHost (o2->convertTo0to1 (2.0f)); // square
+            if (auto* pw = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2PulseWidth))
+                pw->setValueNotifyingHost (pw->convertTo0to1 (0.2f));
+            if (auto* sub = apvts.getParameter (GuitarSynthAudioProcessor::paramSubLevel))
+                sub->setValueNotifyingHost (sub->convertTo0to1 (0.4f));
+            if (auto* noise = apvts.getParameter (GuitarSynthAudioProcessor::paramNoiseMix))
+                noise->setValueNotifyingHost (noise->convertTo0to1 (0.15f));
+            if (auto* chorusOn = apvts.getParameter (GuitarSynthAudioProcessor::paramChorusEnabled))
+                chorusOn->setValueNotifyingHost (1.0f);
+
+            float wavePeak = 0.0f;
+            bool waveFinite = true;
+            for (int block = 0; block < 30; ++block)
+            {
+                fillTone (buffer, 220.0f, sampleRate, block * blockSize);
+                waveProc.processBlock (buffer, midi);
+                const float peak = bufferPeak (buffer);
+                wavePeak = juce::jmax (wavePeak, peak);
+                if (! std::isfinite (peak))
+                    waveFinite = false;
+            }
+
+            expectTrue ("Triangle / PWM / sub / noise / chorus path is finite", waveFinite);
+            expectTrue ("Triangle / PWM / sub / noise / chorus path is audible", wavePeak > 1.0e-3f);
+        }
+
+        {
+            GuitarSynthAudioProcessor arpProc;
+            arpProc.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+            arpProc.prepareToPlay (sampleRate, blockSize);
+            auto& apvts = arpProc.getApvts();
+
+            if (auto* arpOn = apvts.getParameter (GuitarSynthAudioProcessor::paramArpEnabled))
+                arpOn->setValueNotifyingHost (1.0f);
+            if (auto* rate = apvts.getParameter (GuitarSynthAudioProcessor::paramArpRate))
+                rate->setValueNotifyingHost (rate->convertTo0to1 (8.0f));
+            if (auto* gate = apvts.getParameter (GuitarSynthAudioProcessor::paramArpGate))
+                gate->setValueNotifyingHost (gate->convertTo0to1 (40.0f));
+            if (auto* oct = dynamic_cast<juce::AudioParameterInt*> (
+                    apvts.getParameter (GuitarSynthAudioProcessor::paramArpOctaves)))
+                oct->setValueNotifyingHost (oct->convertTo0to1 (2.0f));
+            if (auto* chord = apvts.getParameter (GuitarSynthAudioProcessor::paramArpChord))
+                chord->setValueNotifyingHost (chord->convertTo0to1 (1.0f)); // Major
+            if (auto* mode = apvts.getParameter (GuitarSynthAudioProcessor::paramArpMode))
+                mode->setValueNotifyingHost (mode->convertTo0to1 (0.0f)); // Up
+            if (auto* attack = apvts.getParameter (GuitarSynthAudioProcessor::paramAttack))
+                attack->setValueNotifyingHost (attack->convertTo0to1 (5.0f));
+            if (auto* release = apvts.getParameter (GuitarSynthAudioProcessor::paramRelease))
+                release->setValueNotifyingHost (release->convertTo0to1 (40.0f));
+
+            float arpPeak = 0.0f;
+            bool arpFinite = true;
+            for (int block = 0; block < 80; ++block)
+            {
+                fillTone (buffer, 220.0f, sampleRate, block * blockSize);
+                arpProc.processBlock (buffer, midi);
+                const float peak = bufferPeak (buffer);
+                arpPeak = juce::jmax (arpPeak, peak);
+                if (! std::isfinite (peak))
+                    arpFinite = false;
+            }
+
+            expectTrue ("Arpeggiator path is finite", arpFinite);
+            expectTrue ("Arpeggiator path is audible", arpPeak > 1.0e-3f);
+        }
+
+        {
+            // High-pitch PolyBLEP / PWM sanity: aliasing-prone region must stay finite and audible.
+            GuitarSynthAudioProcessor hqProc;
+            hqProc.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+            hqProc.prepareToPlay (sampleRate, blockSize);
+            auto& apvts = hqProc.getApvts();
+
+            if (auto* wf = apvts.getParameter (GuitarSynthAudioProcessor::paramWaveform))
+                wf->setValueNotifyingHost (wf->convertTo0to1 (1.0f)); // saw
+            if (auto* o2 = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2Waveform))
+                o2->setValueNotifyingHost (o2->convertTo0to1 (2.0f)); // square
+            if (auto* mix = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2Mix))
+                mix->setValueNotifyingHost (mix->convertTo0to1 (0.5f));
+            if (auto* pw1 = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc1PulseWidth))
+                pw1->setValueNotifyingHost (pw1->convertTo0to1 (0.5f));
+            if (auto* pw2 = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2PulseWidth))
+                pw2->setValueNotifyingHost (pw2->convertTo0to1 (0.18f));
+            if (auto* sub = apvts.getParameter (GuitarSynthAudioProcessor::paramSubLevel))
+                sub->setValueNotifyingHost (sub->convertTo0to1 (0.35f));
+            if (auto* voices = dynamic_cast<juce::AudioParameterInt*> (
+                    apvts.getParameter (GuitarSynthAudioProcessor::paramOsc1UnisonVoices)))
+                voices->setValueNotifyingHost (voices->convertTo0to1 (6.0f));
+            if (auto* cut = apvts.getParameter (GuitarSynthAudioProcessor::paramFilterCutoff))
+                cut->setValueNotifyingHost (cut->convertTo0to1 (6000.0f));
+
+            float hqPeak = 0.0f;
+            bool hqFinite = true;
+            for (int block = 0; block < 40; ++block)
+            {
+                fillTone (buffer, 1000.0f, sampleRate, block * blockSize);
+                hqProc.processBlock (buffer, midi);
+                const float peak = bufferPeak (buffer);
+                hqPeak = juce::jmax (hqPeak, peak);
+                if (! std::isfinite (peak))
+                    hqFinite = false;
+            }
+
+            expectTrue ("High-pitch PolyBLEP saw/PWM path is finite", hqFinite);
+            expectTrue ("High-pitch PolyBLEP saw/PWM path is audible", hqPeak > 1.0e-3f);
+
+            if (auto* wf = apvts.getParameter (GuitarSynthAudioProcessor::paramWaveform))
+                wf->setValueNotifyingHost (wf->convertTo0to1 (3.0f)); // triangle
+
+            float triPeak = 0.0f;
+            bool triFinite = true;
+            for (int block = 0; block < 40; ++block)
+            {
+                fillTone (buffer, 1000.0f, sampleRate, block * blockSize);
+                hqProc.processBlock (buffer, midi);
+                const float peak = bufferPeak (buffer);
+                triPeak = juce::jmax (triPeak, peak);
+                if (! std::isfinite (peak))
+                    triFinite = false;
+            }
+
+            expectTrue ("High-pitch PolyBLEP triangle path is finite", triFinite);
+            expectTrue ("High-pitch PolyBLEP triangle path is audible", triPeak > 1.0e-3f);
+        }
     }
 
     {
@@ -346,6 +527,78 @@ int main()
             distPeak = juce::jmax (distPeak, bufferPeak (buffer));
         }
         expectTrue ("Distortion enabled stays audible", distPeak > 1.0e-3f);
+    }
+
+    {
+        // Same fretted pitch, two pick bursts while the gate stays open — second burst
+        // should re-attack the amp envelope (not stay flat on sustain).
+        GuitarSynthAudioProcessor retrigProc;
+        retrigProc.setPlayConfigDetails (2, 2, sampleRate, blockSize);
+        retrigProc.prepareToPlay (sampleRate, blockSize);
+
+        auto& apvts = retrigProc.getApvts();
+        if (auto* gateParam = apvts.getParameter (GuitarSynthAudioProcessor::paramGateThreshold))
+            gateParam->setValueNotifyingHost (gateParam->convertTo0to1 (-48.0f));
+        if (auto* retrig = apvts.getParameter (GuitarSynthAudioProcessor::paramRetriggerSensitivity))
+            retrig->setValueNotifyingHost (retrig->convertTo0to1 (0.75f));
+        if (auto* attack = apvts.getParameter (GuitarSynthAudioProcessor::paramAttack))
+            attack->setValueNotifyingHost (attack->convertTo0to1 (2.0f));
+        if (auto* decay = apvts.getParameter (GuitarSynthAudioProcessor::paramDecay))
+            decay->setValueNotifyingHost (decay->convertTo0to1 (40.0f));
+        if (auto* sustain = apvts.getParameter (GuitarSynthAudioProcessor::paramSustain))
+            sustain->setValueNotifyingHost (sustain->convertTo0to1 (0.08f));
+        if (auto* osc2Attack = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2Attack))
+            osc2Attack->setValueNotifyingHost (osc2Attack->convertTo0to1 (2.0f));
+        if (auto* osc2Decay = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2Decay))
+            osc2Decay->setValueNotifyingHost (osc2Decay->convertTo0to1 (40.0f));
+        if (auto* osc2Sustain = apvts.getParameter (GuitarSynthAudioProcessor::paramOsc2Sustain))
+            osc2Sustain->setValueNotifyingHost (osc2Sustain->convertTo0to1 (0.08f));
+        if (auto* glide = apvts.getParameter (GuitarSynthAudioProcessor::paramGlide))
+            glide->setValueNotifyingHost (glide->convertTo0to1 (0.0f));
+
+        constexpr float freq = 110.0f;
+        int sampleIndex = 0;
+
+        // First pick + hold above gate so pitch locks and amp settles to low sustain.
+        for (int block = 0; block < 8; ++block)
+        {
+            fillToneAtAmplitude (buffer, freq, sampleRate, sampleIndex, 0.55f);
+            retrigProc.processBlock (buffer, midi);
+            sampleIndex += blockSize;
+        }
+        for (int block = 0; block < 25; ++block)
+        {
+            fillToneAtAmplitude (buffer, freq, sampleRate, sampleIndex, 0.18f);
+            retrigProc.processBlock (buffer, midi);
+            sampleIndex += blockSize;
+        }
+
+        expectTrue ("Same-note setup tracks near 110 Hz",
+                    retrigProc.getDisplayedFrequency() > 100.0f
+                    && retrigProc.getDisplayedFrequency() < 120.0f);
+        expectTrue ("Same-note setup keeps gate open", retrigProc.getDisplayedGateOpen());
+
+        float sustainPeak = 0.0f;
+        for (int block = 0; block < 8; ++block)
+        {
+            fillToneAtAmplitude (buffer, freq, sampleRate, sampleIndex, 0.18f);
+            retrigProc.processBlock (buffer, midi);
+            sustainPeak = juce::jmax (sustainPeak, bufferPeak (buffer));
+            sampleIndex += blockSize;
+        }
+
+        float retriggerPeak = 0.0f;
+        for (int block = 0; block < 6; ++block)
+        {
+            fillToneAtAmplitude (buffer, freq, sampleRate, sampleIndex, 0.75f);
+            retrigProc.processBlock (buffer, midi);
+            retriggerPeak = juce::jmax (retriggerPeak, bufferPeak (buffer));
+            sampleIndex += blockSize;
+        }
+
+        expectTrue ("Pick re-attack raises output above low sustain",
+                    retriggerPeak > sustainPeak * 1.8f
+                    && retriggerPeak > 1.0e-3f);
     }
 
     std::cout << "Input peak: " << processor.getDisplayedInputPeak()

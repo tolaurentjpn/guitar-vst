@@ -11,10 +11,10 @@ namespace
 
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             GuitarSynthAudioProcessor::paramWaveform, "Osc 1 Waveform",
-            juce::StringArray { "Sine", "Saw", "Square" }, 1));
+            juce::StringArray { "Sine", "Saw", "Square", "Triangle" }, 1));
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             GuitarSynthAudioProcessor::paramOsc2Waveform, "Osc 2 Waveform",
-            juce::StringArray { "Sine", "Saw", "Square" }, 1));
+            juce::StringArray { "Sine", "Saw", "Square", "Triangle" }, 1));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramOsc2Mix, "Osc 2 Mix",
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.35f));
@@ -24,6 +24,18 @@ namespace
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramOsc2Detune, "Osc 2 Detune",
             juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f, "cents"));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramOsc1PulseWidth, "Osc 1 Pulse Width",
+            juce::NormalisableRange<float> (0.05f, 0.5f, 0.001f), 0.5f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramOsc2PulseWidth, "Osc 2 Pulse Width",
+            juce::NormalisableRange<float> (0.05f, 0.5f, 0.001f), 0.5f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramSubLevel, "Sub Level",
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramNoiseMix, "Noise Mix",
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f));
 
         params.push_back (std::make_unique<juce::AudioParameterInt> (
             GuitarSynthAudioProcessor::paramOsc1UnisonVoices, "Osc 1 Voices", 1, 8, 1));
@@ -70,56 +82,56 @@ namespace
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramAttack, "Osc 1 Attack",
-            juce::NormalisableRange<float> (1.0f, 200.0f, 0.1f, 0.4f), 8.0f, "ms"));
+            juce::NormalisableRange<float> (1.0f, 5000.0f, 0.1f, 0.35f), 8.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramDecay, "Osc 1 Decay",
-            juce::NormalisableRange<float> (10.0f, 1000.0f, 0.1f, 0.4f), 180.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 4000.0f, 0.1f, 0.35f), 180.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramSustain, "Osc 1 Sustain",
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.75f));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramRelease, "Osc 1 Release",
-            juce::NormalisableRange<float> (10.0f, 2000.0f, 0.1f, 0.4f), 220.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 8000.0f, 0.1f, 0.35f), 220.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramOsc2Attack, "Osc 2 Attack",
-            juce::NormalisableRange<float> (1.0f, 200.0f, 0.1f, 0.4f), 8.0f, "ms"));
+            juce::NormalisableRange<float> (1.0f, 5000.0f, 0.1f, 0.35f), 8.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramOsc2Decay, "Osc 2 Decay",
-            juce::NormalisableRange<float> (10.0f, 1000.0f, 0.1f, 0.4f), 180.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 4000.0f, 0.1f, 0.35f), 180.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramOsc2Sustain, "Osc 2 Sustain",
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.75f));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramOsc2Release, "Osc 2 Release",
-            juce::NormalisableRange<float> (10.0f, 2000.0f, 0.1f, 0.4f), 220.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 8000.0f, 0.1f, 0.35f), 220.0f, "ms"));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv1Attack, "Filter Env 1 Attack",
-            juce::NormalisableRange<float> (1.0f, 200.0f, 0.1f, 0.4f), 8.0f, "ms"));
+            juce::NormalisableRange<float> (1.0f, 5000.0f, 0.1f, 0.35f), 8.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv1Decay, "Filter Env 1 Decay",
-            juce::NormalisableRange<float> (10.0f, 1000.0f, 0.1f, 0.4f), 180.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 4000.0f, 0.1f, 0.35f), 180.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv1Sustain, "Filter Env 1 Sustain",
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.5f));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv1Release, "Filter Env 1 Release",
-            juce::NormalisableRange<float> (10.0f, 2000.0f, 0.1f, 0.4f), 220.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 8000.0f, 0.1f, 0.35f), 220.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv1Amount, "Filter Env 1 Amount",
             juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv2Attack, "Filter Env 2 Attack",
-            juce::NormalisableRange<float> (1.0f, 200.0f, 0.1f, 0.4f), 8.0f, "ms"));
+            juce::NormalisableRange<float> (1.0f, 5000.0f, 0.1f, 0.35f), 8.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv2Decay, "Filter Env 2 Decay",
-            juce::NormalisableRange<float> (10.0f, 1000.0f, 0.1f, 0.4f), 180.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 4000.0f, 0.1f, 0.35f), 180.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv2Sustain, "Filter Env 2 Sustain",
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.5f));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv2Release, "Filter Env 2 Release",
-            juce::NormalisableRange<float> (10.0f, 2000.0f, 0.1f, 0.4f), 220.0f, "ms"));
+            juce::NormalisableRange<float> (10.0f, 8000.0f, 0.1f, 0.35f), 220.0f, "ms"));
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramFilterEnv2Amount, "Filter Env 2 Amount",
             juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
@@ -138,6 +150,9 @@ namespace
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramGateThreshold, "Gate",
             juce::NormalisableRange<float> (-80.0f, 0.0f, 0.1f), -48.0f, "dB"));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramRetriggerSensitivity, "Retrigger",
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.5f));
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             GuitarSynthAudioProcessor::paramAdsrSync, "ADSR Sync", false));
 
@@ -161,6 +176,9 @@ namespace
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramLfo1Amp, "LFO 1 → Osc1 Amp",
             juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramLfo1Pwm, "LFO 1 → Osc1 PWM",
+            juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
 
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             GuitarSynthAudioProcessor::paramLfo2Enabled, "LFO 2 On", true));
@@ -182,6 +200,45 @@ namespace
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             GuitarSynthAudioProcessor::paramLfo2Amp, "LFO 2 → Osc2 Amp",
             juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramLfo2Pwm, "LFO 2 → Osc2 PWM",
+            juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
+
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            GuitarSynthAudioProcessor::paramChorusEnabled, "Chorus On", false));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramChorusRate, "Chorus Rate",
+            juce::NormalisableRange<float> (0.05f, 5.0f, 0.001f, 0.4f), 0.8f, "Hz"));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramChorusDepth, "Chorus Depth",
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.35f));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramChorusMix, "Chorus Mix",
+            juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.4f));
+
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            GuitarSynthAudioProcessor::paramArpEnabled, "Arp On", false));
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            GuitarSynthAudioProcessor::paramArpSync, "Arp Sync", false));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramArpRate, "Arp Rate",
+            juce::NormalisableRange<float> (0.25f, 20.0f, 0.001f, 0.4f), 4.0f, "Hz"));
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            GuitarSynthAudioProcessor::paramArpDivision, "Arp Division",
+            juce::StringArray { "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32" }, 1));
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            GuitarSynthAudioProcessor::paramArpGate, "Arp Gate",
+            juce::NormalisableRange<float> (5.0f, 100.0f, 0.1f), 50.0f, "%"));
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            GuitarSynthAudioProcessor::paramArpMode, "Arp Mode",
+            juce::StringArray { "Up", "Down", "UpDown", "Random" }, 0));
+        params.push_back (std::make_unique<juce::AudioParameterInt> (
+            GuitarSynthAudioProcessor::paramArpOctaves, "Arp Octaves", 1, 4, 1));
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            GuitarSynthAudioProcessor::paramArpChord, "Arp Chord",
+            juce::StringArray { "Note", "Major", "Minor", "Maj7", "Min7", "Sus2", "Sus4" }, 1));
+        params.push_back (std::make_unique<juce::AudioParameterBool> (
+            GuitarSynthAudioProcessor::paramArpLatch, "Arp Latch", false));
 
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             GuitarSynthAudioProcessor::paramDistEnabled, "Distortion On", false));
@@ -300,7 +357,7 @@ const juce::String GuitarSynthAudioProcessor::getProgramName (int index)
 
 double GuitarSynthAudioProcessor::getTailLengthSeconds() const
 {
-    return effectChain.getTailLengthSeconds();
+    return juce::jmax (chorusEffect.getTailLengthSeconds(), effectChain.getTailLengthSeconds());
 }
 
 void GuitarSynthAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
@@ -312,6 +369,7 @@ void GuitarSynthAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     pitchTracker.prepare (sampleRate);
     envelopeFollower.prepare (sampleRate);
     synthEngine.prepare (sampleRate, samplesPerBlock);
+    arpeggiator.prepare (sampleRate);
 
     highPassFilter.prepare (spec);
     highPassFilter.coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass (sampleRate, 80.0);
@@ -320,6 +378,7 @@ void GuitarSynthAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     fxSpec.sampleRate = sampleRate;
     fxSpec.maximumBlockSize = static_cast<juce::uint32> (samplesPerBlock);
     fxSpec.numChannels = 2;
+    chorusEffect.prepare (fxSpec);
     effectChain.prepare (fxSpec);
 
     updateRealtimeParameters();
@@ -329,6 +388,8 @@ void GuitarSynthAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
 
 void GuitarSynthAudioProcessor::releaseResources()
 {
+    chorusEffect.reset();
+    arpeggiator.reset();
     effectChain.reset();
 }
 
@@ -354,13 +415,17 @@ bool GuitarSynthAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 void GuitarSynthAudioProcessor::updateRealtimeParameters()
 {
     const auto waveformIndex = static_cast<int> (*apvts.getRawParameterValue (paramWaveform));
-    synthEngine.setWaveform (static_cast<WaveformType> (juce::jlimit (0, 2, waveformIndex)));
+    synthEngine.setWaveform (static_cast<WaveformType> (juce::jlimit (0, 3, waveformIndex)));
 
     const auto osc2WaveformIndex = static_cast<int> (*apvts.getRawParameterValue (paramOsc2Waveform));
-    synthEngine.setOsc2Waveform (static_cast<WaveformType> (juce::jlimit (0, 2, osc2WaveformIndex)));
+    synthEngine.setOsc2Waveform (static_cast<WaveformType> (juce::jlimit (0, 3, osc2WaveformIndex)));
     synthEngine.setOsc2Mix (*apvts.getRawParameterValue (paramOsc2Mix));
     synthEngine.setOsc2Octave (static_cast<int> (*apvts.getRawParameterValue (paramOsc2Octave)) - 1);
     synthEngine.setOsc2DetuneCents (*apvts.getRawParameterValue (paramOsc2Detune));
+    synthEngine.setOsc1PulseWidth (*apvts.getRawParameterValue (paramOsc1PulseWidth));
+    synthEngine.setOsc2PulseWidth (*apvts.getRawParameterValue (paramOsc2PulseWidth));
+    synthEngine.setSubLevel (*apvts.getRawParameterValue (paramSubLevel));
+    synthEngine.setNoiseMix (*apvts.getRawParameterValue (paramNoiseMix));
 
     synthEngine.setOsc1UnisonVoices (static_cast<int> (*apvts.getRawParameterValue (paramOsc1UnisonVoices)));
     synthEngine.setOsc1UnisonDetune (*apvts.getRawParameterValue (paramOsc1UnisonDetune));
@@ -409,6 +474,7 @@ void GuitarSynthAudioProcessor::updateRealtimeParameters()
     synthEngine.setLfo1ResonanceAmount (*apvts.getRawParameterValue (paramLfo1Resonance));
     synthEngine.setLfo1PitchAmount (*apvts.getRawParameterValue (paramLfo1Pitch));
     synthEngine.setLfo1AmpAmount (*apvts.getRawParameterValue (paramLfo1Amp));
+    synthEngine.setLfo1PwmAmount (*apvts.getRawParameterValue (paramLfo1Pwm));
 
     synthEngine.setLfo2Enabled (*apvts.getRawParameterValue (paramLfo2Enabled) > 0.5f);
     synthEngine.setLfo2Rate (*apvts.getRawParameterValue (paramLfo2Rate));
@@ -417,6 +483,7 @@ void GuitarSynthAudioProcessor::updateRealtimeParameters()
     synthEngine.setLfo2ResonanceAmount (*apvts.getRawParameterValue (paramLfo2Resonance));
     synthEngine.setLfo2PitchAmount (*apvts.getRawParameterValue (paramLfo2Pitch));
     synthEngine.setLfo2AmpAmount (*apvts.getRawParameterValue (paramLfo2Amp));
+    synthEngine.setLfo2PwmAmount (*apvts.getRawParameterValue (paramLfo2Pwm));
 
     pitchTracker.setConfidenceThreshold (*apvts.getRawParameterValue (paramTrackingSensitivity));
     pitchTracker.setSmoothing (0.15f + (1.0f - *apvts.getRawParameterValue (paramTrackingSensitivity)) * 0.6f);
@@ -424,6 +491,29 @@ void GuitarSynthAudioProcessor::updateRealtimeParameters()
     envelopeFollower.setAttackMs (2.0f);
     envelopeFollower.setReleaseMs (180.0f);
     envelopeFollower.setGateThreshold (*apvts.getRawParameterValue (paramGateThreshold));
+    envelopeFollower.setRetriggerSensitivity (*apvts.getRawParameterValue (paramRetriggerSensitivity));
+
+    chorusEffect.setBypassed (*apvts.getRawParameterValue (paramChorusEnabled) < 0.5f);
+    chorusEffect.setRate (*apvts.getRawParameterValue (paramChorusRate));
+    chorusEffect.setDepth (*apvts.getRawParameterValue (paramChorusDepth));
+    chorusEffect.setMix (*apvts.getRawParameterValue (paramChorusMix));
+
+    arpeggiator.setEnabled (*apvts.getRawParameterValue (paramArpEnabled) > 0.5f);
+    arpeggiator.setSync (*apvts.getRawParameterValue (paramArpSync) > 0.5f);
+    arpeggiator.setRate (*apvts.getRawParameterValue (paramArpRate));
+    arpeggiator.setDivision (static_cast<int> (*apvts.getRawParameterValue (paramArpDivision)));
+    arpeggiator.setGate (*apvts.getRawParameterValue (paramArpGate));
+    arpeggiator.setMode (static_cast<int> (*apvts.getRawParameterValue (paramArpMode)));
+    arpeggiator.setOctaves (static_cast<int> (*apvts.getRawParameterValue (paramArpOctaves)));
+    arpeggiator.setChord (static_cast<int> (*apvts.getRawParameterValue (paramArpChord)));
+    arpeggiator.setLatch (*apvts.getRawParameterValue (paramArpLatch) > 0.5f);
+
+    double bpm = 120.0;
+    if (auto* playHead = getPlayHead())
+        if (auto position = playHead->getPosition())
+            if (auto hostBpm = position->getBpm())
+                bpm = *hostBpm;
+    arpeggiator.setHostBpm (bpm);
 
     auto& dist = effectChain.getDistortion();
     dist.setBypassed (*apvts.getRawParameterValue (paramDistEnabled) < 0.5f);
@@ -503,12 +593,18 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     bool trackingActive = false;
     bool gateWasOpen = false;
+    const bool arpEnabled = *apvts.getRawParameterValue (paramArpEnabled) > 0.5f;
+    if (! arpEnabled && arpeggiator.isActive())
+        arpeggiator.reset();
 
     for (int i = 0; i < numSamples; ++i)
     {
         const float hpSample = highPassFilter.processSample (inputSamples[static_cast<size_t> (i)]);
         envelopeFollower.processSample (hpSample);
         const bool gateOpen = envelopeFollower.isGateOpen();
+
+        float trackedHz = 0.0f;
+        trackingActive = false;
 
         if (gateOpen)
         {
@@ -517,7 +613,7 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             trackingActive = pitchTracker.isVoiced()
                           && pitchTracker.getConfidence() >= pitchTracker.getMinConfidenceThreshold()
                                      + (1.0f - juce::jlimit (0.0f, 1.0f, envelopeFollower.getEnvelopeLinear() * 8.0f)) * 0.12f;
-            synthEngine.setPitchState (pitchTracker.getFrequency(), trackingActive);
+            trackedHz = pitchTracker.getFrequency();
         }
         else
         {
@@ -525,7 +621,53 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
                 pitchTracker.flush();
             else
                 pitchTracker.clearVoicing();
+        }
 
+        if (arpEnabled)
+        {
+            const auto arp = arpeggiator.process (trackedHz, trackingActive, gateOpen);
+
+            if (arpeggiator.isActive() || arp.voiced || arp.shouldRetrigger)
+            {
+                synthEngine.setPitchState (arp.frequencyHz, arp.voiced);
+                if (arp.shouldRetrigger && arp.voiced)
+                    synthEngine.retrigger();
+            }
+            else if (! gateOpen)
+            {
+                synthEngine.setPitchState (0.0f, false);
+                trackingActive = false;
+
+                if (synthEngine.isIdle())
+                {
+                    gateWasOpen = gateOpen;
+                    left[i] = 0.0f;
+                    right[i] = 0.0f;
+                    continue;
+                }
+            }
+            else
+            {
+                // Gate open but arp not yet active (waiting for pitch): keep silent path.
+                synthEngine.setPitchState (0.0f, false);
+                if (synthEngine.isIdle())
+                {
+                    gateWasOpen = gateOpen;
+                    left[i] = 0.0f;
+                    right[i] = 0.0f;
+                    continue;
+                }
+            }
+        }
+        else if (gateOpen)
+        {
+            synthEngine.setPitchState (trackedHz, trackingActive);
+
+            if (envelopeFollower.consumeOnset() && trackingActive)
+                synthEngine.retrigger();
+        }
+        else
+        {
             synthEngine.setPitchState (0.0f, false);
             trackingActive = false;
 
@@ -546,6 +688,7 @@ void GuitarSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         right[i] = r;
     }
 
+    chorusEffect.process (buffer);
     effectChain.process (buffer);
 
     displayedFrequency.store (pitchTracker.getFrequency());

@@ -4,6 +4,8 @@
 #include "PitchTracker.h"
 #include "EnvelopeFollower.h"
 #include "SynthEngine.h"
+#include "ChorusEffect.h"
+#include "Arpeggiator.h"
 #include "EffectChain.h"
 
 class GuitarSynthAudioProcessor : public juce::AudioProcessor
@@ -54,6 +56,10 @@ public:
     static constexpr const char* paramOsc2Mix = "osc2Mix";
     static constexpr const char* paramOsc2Octave = "osc2Octave";
     static constexpr const char* paramOsc2Detune = "osc2Detune";
+    static constexpr const char* paramOsc1PulseWidth = "osc1PulseWidth";
+    static constexpr const char* paramOsc2PulseWidth = "osc2PulseWidth";
+    static constexpr const char* paramSubLevel = "subLevel";
+    static constexpr const char* paramNoiseMix = "noiseMix";
 
     static constexpr const char* paramOsc1UnisonVoices = "osc1UnisonVoices";
     static constexpr const char* paramOsc1UnisonDetune = "osc1UnisonDetune";
@@ -96,6 +102,7 @@ public:
     static constexpr const char* paramMasterGain = "masterGain";
     static constexpr const char* paramTrackingSensitivity = "trackingSensitivity";
     static constexpr const char* paramGateThreshold = "gateThreshold";
+    static constexpr const char* paramRetriggerSensitivity = "retriggerSensitivity";
     static constexpr const char* paramAdsrSync = "adsrSync";
     static constexpr const char* paramLfo1Enabled = "lfo1Enabled";
     static constexpr const char* paramLfo1Rate = "lfo1Rate";
@@ -104,6 +111,7 @@ public:
     static constexpr const char* paramLfo1Resonance = "lfo1Resonance";
     static constexpr const char* paramLfo1Pitch = "lfo1Pitch";
     static constexpr const char* paramLfo1Amp = "lfo1Amp";
+    static constexpr const char* paramLfo1Pwm = "lfo1Pwm";
     static constexpr const char* paramLfo2Enabled = "lfo2Enabled";
     static constexpr const char* paramLfo2Rate = "lfo2Rate";
     static constexpr const char* paramLfo2Shape = "lfo2Shape";
@@ -111,6 +119,22 @@ public:
     static constexpr const char* paramLfo2Resonance = "lfo2Resonance";
     static constexpr const char* paramLfo2Pitch = "lfo2Pitch";
     static constexpr const char* paramLfo2Amp = "lfo2Amp";
+    static constexpr const char* paramLfo2Pwm = "lfo2Pwm";
+
+    static constexpr const char* paramChorusEnabled = "chorusEnabled";
+    static constexpr const char* paramChorusRate = "chorusRate";
+    static constexpr const char* paramChorusDepth = "chorusDepth";
+    static constexpr const char* paramChorusMix = "chorusMix";
+
+    static constexpr const char* paramArpEnabled = "arpEnabled";
+    static constexpr const char* paramArpSync = "arpSync";
+    static constexpr const char* paramArpRate = "arpRate";
+    static constexpr const char* paramArpDivision = "arpDivision";
+    static constexpr const char* paramArpGate = "arpGate";
+    static constexpr const char* paramArpMode = "arpMode";
+    static constexpr const char* paramArpOctaves = "arpOctaves";
+    static constexpr const char* paramArpChord = "arpChord";
+    static constexpr const char* paramArpLatch = "arpLatch";
 
     static constexpr const char* paramDistEnabled = "distEnabled";
     static constexpr const char* paramDistMode = "distMode";
@@ -154,6 +178,8 @@ private:
     PitchTracker pitchTracker;
     EnvelopeFollower envelopeFollower;
     SynthEngine synthEngine;
+    ChorusEffect chorusEffect;
+    Arpeggiator arpeggiator;
     EffectChain effectChain;
 
     juce::dsp::IIR::Filter<float> highPassFilter;

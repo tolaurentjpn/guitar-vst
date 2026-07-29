@@ -2,9 +2,9 @@
 
 namespace
 {
-    constexpr float kMaxAttackMs = 200.0f;
-    constexpr float kMaxDecayMs = 1000.0f;
-    constexpr float kMaxReleaseMs = 2000.0f;
+    constexpr float kMaxAttackMs = 5000.0f;
+    constexpr float kMaxDecayMs = 4000.0f;
+    constexpr float kMaxReleaseMs = 8000.0f;
     constexpr float kHandleRadius = 7.0f;
 }
 

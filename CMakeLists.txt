@@ -40,6 +40,8 @@ juce_add_binary_data(GuitarSynthAssets SOURCES
     Assets/btn_saw_on.png
     Assets/btn_square.png
     Assets/btn_square_on.png
+    Assets/btn_triangle.png
+    Assets/btn_triangle_on.png
     Assets/led_on.png
     Assets/led_off.png)
 
@@ -59,6 +61,8 @@ target_sources(GuitarSynth
         Source/CompressorEffect.cpp
         Source/DelayEffect.cpp
         Source/ReverbEffect.cpp
+        Source/ChorusEffect.cpp
+        Source/Arpeggiator.cpp
         Source/EffectChain.cpp
         Source/FxRackComponent.cpp)
 

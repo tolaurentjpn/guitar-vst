@@ -74,6 +74,7 @@ public:
         editor.paintSectionPanel (g, editor.oscPanelBounds, "OSCILLATORS");
         editor.paintSectionPanel (g, editor.waveformBounds, {});
         editor.paintSectionPanel (g, editor.playPanelBounds, "PLAY");
+        editor.paintSectionPanel (g, editor.arpPanelBounds, "ARP");
         editor.paintSectionPanel (g, editor.filterPanelBounds, "FILTERS");
         editor.paintSectionPanel (g, editor.envelopePanelBounds, "ENVELOPES");
     }
@@ -134,6 +135,7 @@ public:
 
     void paint (juce::Graphics& g) override
     {
+        editor.paintSectionPanel (g, editor.chorusPanelBounds, "CHORUS");
         editor.paintSectionPanel (g, editor.fxRackBounds, "FX CHAIN");
         editor.paintSectionPanel (g, editor.fxDetailBounds, "EFFECT");
     }
@@ -173,7 +175,7 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
 {
     setLookAndFeel (&lookAndFeel);
     setResizable (true, true);
-    setResizeLimits (720, 600, 1400, 1100);
+    setResizeLimits (720, 720, 1400, 1300);
 
     titleLabel.setText ("GUITAR SYNTH", juce::dontSendNotification);
     titleLabel.setFont (juce::Font (juce::FontOptions (26.0f, juce::Font::bold)));
@@ -247,6 +249,7 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     styleSectionLabel (*synthPage, osc1EnvelopeLabel, "OSC 1");
     styleSectionLabel (*synthPage, osc2EnvelopeLabel, "OSC 2");
     styleSectionLabel (*synthPage, playSectionLabel, "PLAY");
+    styleSectionLabel (*synthPage, arpSectionLabel, "ARP");
     styleSectionLabel (*synthPage, octaveLabel, "OCTAVE");
     styleSectionLabel (*synthPage, osc1UnisonLabel, "UNISON");
     styleSectionLabel (*synthPage, osc2UnisonLabel, "UNISON");
@@ -254,6 +257,7 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     styleSectionLabel (*lfoPage, lfo2SectionLabel, "LFO 2 → OSC 2");
     styleSectionLabel (*filterEnvPage, filterEnv1SectionLabel, "FILTER ENV 1");
     styleSectionLabel (*filterEnvPage, filterEnv2SectionLabel, "FILTER ENV 2");
+    styleSectionLabel (*fxPage, chorusSectionLabel, "CHORUS");
 
     inputMeter->setAccent (juce::Colour (0xff4aa3ff));
     gateMeter->setAccent (juce::Colour (0xff4cd964));
@@ -266,10 +270,12 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     setupWaveformButton (*synthPage, sineButton, 0, 1001, GuitarSynthAudioProcessor::paramWaveform);
     setupWaveformButton (*synthPage, sawButton, 1, 1001, GuitarSynthAudioProcessor::paramWaveform);
     setupWaveformButton (*synthPage, squareButton, 2, 1001, GuitarSynthAudioProcessor::paramWaveform);
+    setupWaveformButton (*synthPage, triangleButton, 3, 1001, GuitarSynthAudioProcessor::paramWaveform);
 
     setupWaveformButton (*synthPage, osc2SineButton, 0, 1002, GuitarSynthAudioProcessor::paramOsc2Waveform);
     setupWaveformButton (*synthPage, osc2SawButton, 1, 1002, GuitarSynthAudioProcessor::paramOsc2Waveform);
     setupWaveformButton (*synthPage, osc2SquareButton, 2, 1002, GuitarSynthAudioProcessor::paramOsc2Waveform);
+    setupWaveformButton (*synthPage, osc2TriangleButton, 3, 1002, GuitarSynthAudioProcessor::paramOsc2Waveform);
 
     setupOctaveButton (*synthPage, octaveDownButton, 0);
     setupOctaveButton (*synthPage, octaveZeroButton, 1);
@@ -289,13 +295,25 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     styleChoiceButton (lfo2EnableButton);
     styleChoiceButton (adsrSyncButton);
     styleChoiceButton (filterEnvSyncButton);
+    styleChoiceButton (chorusEnableButton);
+    styleChoiceButton (arpEnableButton);
+    styleChoiceButton (arpSyncButton);
+    styleChoiceButton (arpLatchButton);
     lfoPage->addAndMakeVisible (lfo1EnableButton);
     lfoPage->addAndMakeVisible (lfo2EnableButton);
     synthPage->addAndMakeVisible (adsrSyncButton);
     filterEnvPage->addAndMakeVisible (filterEnvSyncButton);
+    fxPage->addAndMakeVisible (chorusEnableButton);
+    synthPage->addAndMakeVisible (arpEnableButton);
+    synthPage->addAndMakeVisible (arpSyncButton);
+    synthPage->addAndMakeVisible (arpLatchButton);
 
     setupSlider (*synthPage, osc2MixSlider, osc2MixLabel, "Mix");
     setupSlider (*synthPage, osc2DetuneSlider, osc2DetuneLabel, "Detune");
+    setupSlider (*synthPage, osc1PulseWidthSlider, osc1PulseWidthLabel, "PWM");
+    setupSlider (*synthPage, osc2PulseWidthSlider, osc2PulseWidthLabel, "PWM");
+    setupSlider (*synthPage, subLevelSlider, subLevelLabel, "Sub");
+    setupSlider (*synthPage, noiseMixSlider, noiseMixLabel, "Noise");
     setupSlider (*synthPage, osc1UnisonVoicesSlider, osc1UnisonVoicesLabel, "Voices");
     setupSlider (*synthPage, osc1UnisonDetuneSlider, osc1UnisonDetuneLabel, "Detune");
     setupSlider (*synthPage, osc1UnisonSpreadSlider, osc1UnisonSpreadLabel, "Spread");
@@ -320,20 +338,30 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     setupSlider (*synthPage, masterSlider, masterLabel, "Master");
     setupSlider (*synthPage, trackingSlider, trackingLabel, "Sensitivity");
     setupSlider (*synthPage, gateSlider, gateLabel, "Gate");
+    setupSlider (*synthPage, retriggerSlider, retriggerLabel, "Retrigger");
+    setupSlider (*synthPage, arpRateSlider, arpRateLabel, "Rate");
+    setupSlider (*synthPage, arpGateSlider, arpGateLabel, "Gate");
+    setupSlider (*synthPage, arpOctavesSlider, arpOctavesLabel, "Octaves");
 
     setupSlider (*lfoPage, lfo1RateSlider, lfo1RateLabel, "Rate");
     setupSlider (*lfoPage, lfo1FilterSlider, lfo1FilterLabel, "Cutoff");
     setupSlider (*lfoPage, lfo1ResonanceSlider, lfo1ResonanceLabel, "Resonance");
     setupSlider (*lfoPage, lfo1PitchSlider, lfo1PitchLabel, "Pitch");
     setupSlider (*lfoPage, lfo1AmpSlider, lfo1AmpLabel, "Amp");
+    setupSlider (*lfoPage, lfo1PwmSlider, lfo1PwmLabel, "PWM");
     setupSlider (*lfoPage, lfo2RateSlider, lfo2RateLabel, "Rate");
     setupSlider (*lfoPage, lfo2FilterSlider, lfo2FilterLabel, "Cutoff");
     setupSlider (*lfoPage, lfo2ResonanceSlider, lfo2ResonanceLabel, "Resonance");
     setupSlider (*lfoPage, lfo2PitchSlider, lfo2PitchLabel, "Pitch");
     setupSlider (*lfoPage, lfo2AmpSlider, lfo2AmpLabel, "Amp");
+    setupSlider (*lfoPage, lfo2PwmSlider, lfo2PwmLabel, "PWM");
 
     setupSlider (*filterEnvPage, filterEnv1AmountSlider, filterEnv1AmountLabel, "Amount");
     setupSlider (*filterEnvPage, filterEnv2AmountSlider, filterEnv2AmountLabel, "Amount");
+
+    setupSlider (*fxPage, chorusRateSlider, chorusRateLabel, "Rate");
+    setupSlider (*fxPage, chorusDepthSlider, chorusDepthLabel, "Depth");
+    setupSlider (*fxPage, chorusMixSlider, chorusMixLabel, "Mix");
 
     fxDetailTitleLabel.setText ("Distortion", juce::dontSendNotification);
     fxDetailTitleLabel.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
@@ -345,6 +373,72 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     distModeLabel.setJustificationType (juce::Justification::centredLeft);
     distModeLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
     fxPage->addAndMakeVisible (distModeLabel);
+
+    auto setupArpChoiceRow = [this] (juce::TextButton& button, int radioGroupId, int index,
+                                     const juce::String& paramId, auto syncFn)
+    {
+        styleChoiceButton (button);
+        button.setRadioGroupId (radioGroupId);
+        button.onClick = [this, index, paramId, syncFn]
+        {
+            setChoiceParameter (paramId, index);
+            syncFn();
+        };
+        synthPage->addAndMakeVisible (button);
+    };
+
+    setupArpChoiceRow (arpModeUpButton, 1020, 0, GuitarSynthAudioProcessor::paramArpMode,
+                       [this] { syncArpModeButtons(); });
+    setupArpChoiceRow (arpModeDownButton, 1020, 1, GuitarSynthAudioProcessor::paramArpMode,
+                       [this] { syncArpModeButtons(); });
+    setupArpChoiceRow (arpModeUpDownButton, 1020, 2, GuitarSynthAudioProcessor::paramArpMode,
+                       [this] { syncArpModeButtons(); });
+    setupArpChoiceRow (arpModeRandomButton, 1020, 3, GuitarSynthAudioProcessor::paramArpMode,
+                       [this] { syncArpModeButtons(); });
+
+    setupArpChoiceRow (arpChordNoteButton, 1021, 0, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+    setupArpChoiceRow (arpChordMajorButton, 1021, 1, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+    setupArpChoiceRow (arpChordMinorButton, 1021, 2, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+    setupArpChoiceRow (arpChordMaj7Button, 1021, 3, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+    setupArpChoiceRow (arpChordMin7Button, 1021, 4, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+    setupArpChoiceRow (arpChordSus2Button, 1021, 5, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+    setupArpChoiceRow (arpChordSus4Button, 1021, 6, GuitarSynthAudioProcessor::paramArpChord,
+                       [this] { syncArpChordButtons(); });
+
+    setupArpChoiceRow (arpDivQuarterButton, 1022, 0, GuitarSynthAudioProcessor::paramArpDivision,
+                       [this] { syncArpDivisionButtons(); });
+    setupArpChoiceRow (arpDivEighthButton, 1022, 1, GuitarSynthAudioProcessor::paramArpDivision,
+                       [this] { syncArpDivisionButtons(); });
+    setupArpChoiceRow (arpDivEighthTButton, 1022, 2, GuitarSynthAudioProcessor::paramArpDivision,
+                       [this] { syncArpDivisionButtons(); });
+    setupArpChoiceRow (arpDivSixteenthButton, 1022, 3, GuitarSynthAudioProcessor::paramArpDivision,
+                       [this] { syncArpDivisionButtons(); });
+    setupArpChoiceRow (arpDivSixteenthTButton, 1022, 4, GuitarSynthAudioProcessor::paramArpDivision,
+                       [this] { syncArpDivisionButtons(); });
+    setupArpChoiceRow (arpDivThirtySecondButton, 1022, 5, GuitarSynthAudioProcessor::paramArpDivision,
+                       [this] { syncArpDivisionButtons(); });
+
+    arpModeLabel.setText ("Mode", juce::dontSendNotification);
+    arpModeLabel.setJustificationType (juce::Justification::centredLeft);
+    arpModeLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
+    arpModeLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    synthPage->addAndMakeVisible (arpModeLabel);
+    arpChordLabel.setText ("Chord", juce::dontSendNotification);
+    arpChordLabel.setJustificationType (juce::Justification::centredLeft);
+    arpChordLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
+    arpChordLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    synthPage->addAndMakeVisible (arpChordLabel);
+    arpDivisionLabel.setText ("Div", juce::dontSendNotification);
+    arpDivisionLabel.setJustificationType (juce::Justification::centredLeft);
+    arpDivisionLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
+    arpDivisionLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    synthPage->addAndMakeVisible (arpDivisionLabel);
 
     styleChoiceButton (distSoftButton);
     styleChoiceButton (distHardButton);
@@ -382,6 +476,7 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
 
     filterCutoffSlider.setSkewFactorFromMidPoint (800.0f);
     osc2FilterCutoffSlider.setSkewFactorFromMidPoint (800.0f);
+    arpRateSlider.setSkewFactorFromMidPoint (4.0f);
     lfo1RateSlider.setSkewFactorFromMidPoint (2.0f);
     lfo2RateSlider.setSkewFactorFromMidPoint (2.0f);
     gateSlider.textFromValueFunction = [] (double value)
@@ -402,6 +497,10 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     auto& apvts = audioProcessor.getApvts();
     osc2MixAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc2Mix, osc2MixSlider);
     osc2DetuneAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc2Detune, osc2DetuneSlider);
+    osc1PulseWidthAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc1PulseWidth, osc1PulseWidthSlider);
+    osc2PulseWidthAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc2PulseWidth, osc2PulseWidthSlider);
+    subLevelAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramSubLevel, subLevelSlider);
+    noiseMixAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramNoiseMix, noiseMixSlider);
     osc1UnisonVoicesAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc1UnisonVoices, osc1UnisonVoicesSlider);
     osc1UnisonDetuneAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc1UnisonDetune, osc1UnisonDetuneSlider);
     osc1UnisonSpreadAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramOsc1UnisonSpread, osc1UnisonSpreadSlider);
@@ -426,23 +525,36 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     masterAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramMasterGain, masterSlider);
     trackingAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramTrackingSensitivity, trackingSlider);
     gateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramGateThreshold, gateSlider);
+    retriggerAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramRetriggerSensitivity, retriggerSlider);
+    arpRateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramArpRate, arpRateSlider);
+    arpGateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramArpGate, arpGateSlider);
+    arpOctavesAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramArpOctaves, arpOctavesSlider);
+    arpEnableAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramArpEnabled, arpEnableButton);
+    arpSyncAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramArpSync, arpSyncButton);
+    arpLatchAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramArpLatch, arpLatchButton);
     lfo1RateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Rate, lfo1RateSlider);
     lfo1FilterAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Filter, lfo1FilterSlider);
     lfo1ResonanceAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Resonance, lfo1ResonanceSlider);
     lfo1PitchAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Pitch, lfo1PitchSlider);
     lfo1AmpAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Amp, lfo1AmpSlider);
+    lfo1PwmAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Pwm, lfo1PwmSlider);
     lfo2RateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Rate, lfo2RateSlider);
     lfo2FilterAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Filter, lfo2FilterSlider);
     lfo2ResonanceAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Resonance, lfo2ResonanceSlider);
     lfo2PitchAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Pitch, lfo2PitchSlider);
     lfo2AmpAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Amp, lfo2AmpSlider);
+    lfo2PwmAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Pwm, lfo2PwmSlider);
     filterEnv1AmountAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramFilterEnv1Amount, filterEnv1AmountSlider);
     filterEnv2AmountAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramFilterEnv2Amount, filterEnv2AmountSlider);
     lfo1EnableAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo1Enabled, lfo1EnableButton);
     lfo2EnableAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramLfo2Enabled, lfo2EnableButton);
     adsrSyncAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramAdsrSync, adsrSyncButton);
     filterEnvSyncAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramFilterEnvSync, filterEnvSyncButton);
+    chorusEnableAttachment = std::make_unique<ButtonAttachment> (apvts, GuitarSynthAudioProcessor::paramChorusEnabled, chorusEnableButton);
 
+    chorusRateAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramChorusRate, chorusRateSlider);
+    chorusDepthAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramChorusDepth, chorusDepthSlider);
+    chorusMixAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramChorusMix, chorusMixSlider);
     distDriveAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramDistDrive, distDriveSlider);
     distToneAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramDistTone, distToneSlider);
     distMixAttachment = std::make_unique<SliderAttachment> (apvts, GuitarSynthAudioProcessor::paramDistMix, distMixSlider);
@@ -503,6 +615,9 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     apvts.addParameterListener (GuitarSynthAudioProcessor::paramLfo1Shape, this);
     apvts.addParameterListener (GuitarSynthAudioProcessor::paramLfo2Shape, this);
     apvts.addParameterListener (GuitarSynthAudioProcessor::paramDistMode, this);
+    apvts.addParameterListener (GuitarSynthAudioProcessor::paramArpMode, this);
+    apvts.addParameterListener (GuitarSynthAudioProcessor::paramArpChord, this);
+    apvts.addParameterListener (GuitarSynthAudioProcessor::paramArpDivision, this);
     apvts.addParameterListener (GuitarSynthAudioProcessor::paramAdsrSync, this);
     apvts.addParameterListener (GuitarSynthAudioProcessor::paramAttack, this);
     apvts.addParameterListener (GuitarSynthAudioProcessor::paramDecay, this);
@@ -530,10 +645,13 @@ GuitarSynthAudioProcessorEditor::GuitarSynthAudioProcessorEditor (GuitarSynthAud
     syncLfoShapeButtons (1);
     syncLfoShapeButtons (2);
     syncDistModeButtons();
+    syncArpModeButtons();
+    syncArpChordButtons();
+    syncArpDivisionButtons();
     syncFxDetailVisibility();
     syncPresetCombo();
 
-    setSize (980, 860);
+    setSize (980, 920);
     startTimerHz (30);
 }
 
@@ -546,6 +664,9 @@ GuitarSynthAudioProcessorEditor::~GuitarSynthAudioProcessorEditor()
     apvts.removeParameterListener (GuitarSynthAudioProcessor::paramLfo1Shape, this);
     apvts.removeParameterListener (GuitarSynthAudioProcessor::paramLfo2Shape, this);
     apvts.removeParameterListener (GuitarSynthAudioProcessor::paramDistMode, this);
+    apvts.removeParameterListener (GuitarSynthAudioProcessor::paramArpMode, this);
+    apvts.removeParameterListener (GuitarSynthAudioProcessor::paramArpChord, this);
+    apvts.removeParameterListener (GuitarSynthAudioProcessor::paramArpDivision, this);
     apvts.removeParameterListener (GuitarSynthAudioProcessor::paramAdsrSync, this);
     apvts.removeParameterListener (GuitarSynthAudioProcessor::paramAttack, this);
     apvts.removeParameterListener (GuitarSynthAudioProcessor::paramDecay, this);
@@ -650,6 +771,7 @@ void GuitarSynthAudioProcessorEditor::syncWaveformButtons()
     sineButton.setToggleState (index == 0, juce::dontSendNotification);
     sawButton.setToggleState (index == 1, juce::dontSendNotification);
     squareButton.setToggleState (index == 2, juce::dontSendNotification);
+    triangleButton.setToggleState (index == 3, juce::dontSendNotification);
 
     auto apply = [this] (juce::ImageButton& button, int waveformIndex, bool active)
     {
@@ -664,6 +786,7 @@ void GuitarSynthAudioProcessorEditor::syncWaveformButtons()
     apply (sineButton, 0, index == 0);
     apply (sawButton, 1, index == 1);
     apply (squareButton, 2, index == 2);
+    apply (triangleButton, 3, index == 3);
 }
 
 void GuitarSynthAudioProcessorEditor::syncOsc2WaveformButtons()
@@ -674,6 +797,7 @@ void GuitarSynthAudioProcessorEditor::syncOsc2WaveformButtons()
     osc2SineButton.setToggleState (index == 0, juce::dontSendNotification);
     osc2SawButton.setToggleState (index == 1, juce::dontSendNotification);
     osc2SquareButton.setToggleState (index == 2, juce::dontSendNotification);
+    osc2TriangleButton.setToggleState (index == 3, juce::dontSendNotification);
 
     auto apply = [this] (juce::ImageButton& button, int waveformIndex, bool active)
     {
@@ -688,6 +812,7 @@ void GuitarSynthAudioProcessorEditor::syncOsc2WaveformButtons()
     apply (osc2SineButton, 0, index == 0);
     apply (osc2SawButton, 1, index == 1);
     apply (osc2SquareButton, 2, index == 2);
+    apply (osc2TriangleButton, 3, index == 3);
 }
 
 void GuitarSynthAudioProcessorEditor::syncOctaveButtons()
@@ -730,6 +855,44 @@ void GuitarSynthAudioProcessorEditor::syncDistModeButtons()
     distSoftButton.setToggleState (index == 0, juce::dontSendNotification);
     distHardButton.setToggleState (index == 1, juce::dontSendNotification);
     distFoldButton.setToggleState (index == 2, juce::dontSendNotification);
+}
+
+void GuitarSynthAudioProcessorEditor::syncArpModeButtons()
+{
+    const int index = juce::roundToInt (audioProcessor.getApvts()
+                                            .getRawParameterValue (GuitarSynthAudioProcessor::paramArpMode)
+                                            ->load());
+    arpModeUpButton.setToggleState (index == 0, juce::dontSendNotification);
+    arpModeDownButton.setToggleState (index == 1, juce::dontSendNotification);
+    arpModeUpDownButton.setToggleState (index == 2, juce::dontSendNotification);
+    arpModeRandomButton.setToggleState (index == 3, juce::dontSendNotification);
+}
+
+void GuitarSynthAudioProcessorEditor::syncArpChordButtons()
+{
+    const int index = juce::roundToInt (audioProcessor.getApvts()
+                                            .getRawParameterValue (GuitarSynthAudioProcessor::paramArpChord)
+                                            ->load());
+    arpChordNoteButton.setToggleState (index == 0, juce::dontSendNotification);
+    arpChordMajorButton.setToggleState (index == 1, juce::dontSendNotification);
+    arpChordMinorButton.setToggleState (index == 2, juce::dontSendNotification);
+    arpChordMaj7Button.setToggleState (index == 3, juce::dontSendNotification);
+    arpChordMin7Button.setToggleState (index == 4, juce::dontSendNotification);
+    arpChordSus2Button.setToggleState (index == 5, juce::dontSendNotification);
+    arpChordSus4Button.setToggleState (index == 6, juce::dontSendNotification);
+}
+
+void GuitarSynthAudioProcessorEditor::syncArpDivisionButtons()
+{
+    const int index = juce::roundToInt (audioProcessor.getApvts()
+                                            .getRawParameterValue (GuitarSynthAudioProcessor::paramArpDivision)
+                                            ->load());
+    arpDivQuarterButton.setToggleState (index == 0, juce::dontSendNotification);
+    arpDivEighthButton.setToggleState (index == 1, juce::dontSendNotification);
+    arpDivEighthTButton.setToggleState (index == 2, juce::dontSendNotification);
+    arpDivSixteenthButton.setToggleState (index == 3, juce::dontSendNotification);
+    arpDivSixteenthTButton.setToggleState (index == 4, juce::dontSendNotification);
+    arpDivThirtySecondButton.setToggleState (index == 5, juce::dontSendNotification);
 }
 
 void GuitarSynthAudioProcessorEditor::syncFxDetailVisibility()
@@ -814,6 +977,12 @@ void GuitarSynthAudioProcessorEditor::parameterChanged (const juce::String& para
             safeThis->syncLfoShapeButtons (2);
         else if (parameterID == GuitarSynthAudioProcessor::paramDistMode)
             safeThis->syncDistModeButtons();
+        else if (parameterID == GuitarSynthAudioProcessor::paramArpMode)
+            safeThis->syncArpModeButtons();
+        else if (parameterID == GuitarSynthAudioProcessor::paramArpChord)
+            safeThis->syncArpChordButtons();
+        else if (parameterID == GuitarSynthAudioProcessor::paramArpDivision)
+            safeThis->syncArpDivisionButtons();
         else if (parameterID == GuitarSynthAudioProcessor::paramAdsrSync)
         {
             if (newValue > 0.5f)
@@ -1042,8 +1211,8 @@ void GuitarSynthAudioProcessorEditor::layoutSynthPage()
     if (bounds.getWidth() < 32 || bounds.getHeight() < 32)
         return;
 
-    // Taller top row to fit unison knob rows under each oscillator section.
-    const int topHeight = juce::jlimit (300, 380, bounds.getHeight() * 45 / 100);
+    // Top row for oscillators / play; ARP strip sits below.
+    const int topHeight = juce::jlimit (260, 340, bounds.getHeight() * 40 / 100);
     auto topRow = bounds.removeFromTop (topHeight);
     oscPanelBounds = topRow.removeFromLeft (juce::jmax (300, topRow.getWidth() * 2 / 5));
     topRow.removeFromLeft (10);
@@ -1058,10 +1227,11 @@ void GuitarSynthAudioProcessorEditor::layoutSynthPage()
 
         osc2WaveformLabel.setBounds (panel.removeFromTop (14));
         auto osc2Wave = panel.removeFromTop (juce::jmin (36, panel.getHeight() / 6));
-        const int btnW = osc2Wave.getWidth() / 3;
-        osc2SineButton.setBounds (osc2Wave.removeFromLeft (btnW).reduced (3));
-        osc2SawButton.setBounds (osc2Wave.removeFromLeft (btnW).reduced (3));
-        osc2SquareButton.setBounds (osc2Wave.reduced (3));
+        const int btnW = osc2Wave.getWidth() / 4;
+        osc2SineButton.setBounds (osc2Wave.removeFromLeft (btnW).reduced (2));
+        osc2SawButton.setBounds (osc2Wave.removeFromLeft (btnW).reduced (2));
+        osc2SquareButton.setBounds (osc2Wave.removeFromLeft (btnW).reduced (2));
+        osc2TriangleButton.setBounds (osc2Wave.reduced (2));
 
         panel.removeFromTop (2);
         octaveLabel.setBounds (panel.removeFromTop (14));
@@ -1072,10 +1242,11 @@ void GuitarSynthAudioProcessorEditor::layoutSynthPage()
         octaveUpButton.setBounds (octaveRow.reduced (2));
 
         panel.removeFromTop (4);
-        auto mixRow = panel.removeFromTop (juce::jmax (100, panel.getHeight() / 3));
-        const int mixKnobW = mixRow.getWidth() / 2;
+        auto mixRow = panel.removeFromTop (juce::jmax (90, panel.getHeight() / 3));
+        const int mixKnobW = mixRow.getWidth() / 3;
         placeKnob (mixRow.removeFromLeft (mixKnobW), osc2MixSlider, osc2MixLabel);
-        placeKnob (mixRow, osc2DetuneSlider, osc2DetuneLabel);
+        placeKnob (mixRow.removeFromLeft (mixKnobW), osc2DetuneSlider, osc2DetuneLabel);
+        placeKnob (mixRow, osc2PulseWidthSlider, osc2PulseWidthLabel);
 
         panel.removeFromTop (2);
         osc2UnisonLabel.setBounds (panel.removeFromTop (14));
@@ -1090,13 +1261,21 @@ void GuitarSynthAudioProcessorEditor::layoutSynthPage()
         auto wave = waveformBounds.reduced (8);
         osc1WaveformLabel.setBounds (wave.removeFromTop (18));
         wave.removeFromTop (4);
-        auto waveRow = wave.removeFromTop (juce::jmin (44, wave.getHeight() / 4));
-        const int btnW = waveRow.getWidth() / 3;
-        sineButton.setBounds (waveRow.removeFromLeft (btnW).reduced (3));
-        sawButton.setBounds (waveRow.removeFromLeft (btnW).reduced (3));
-        squareButton.setBounds (waveRow.reduced (3));
+        auto waveRow = wave.removeFromTop (juce::jmin (40, wave.getHeight() / 5));
+        const int btnW = waveRow.getWidth() / 4;
+        sineButton.setBounds (waveRow.removeFromLeft (btnW).reduced (2));
+        sawButton.setBounds (waveRow.removeFromLeft (btnW).reduced (2));
+        squareButton.setBounds (waveRow.removeFromLeft (btnW).reduced (2));
+        triangleButton.setBounds (waveRow.reduced (2));
 
-        wave.removeFromTop (8);
+        wave.removeFromTop (4);
+        auto toneRow = wave.removeFromTop (juce::jmax (90, wave.getHeight() / 3));
+        const int toneW = toneRow.getWidth() / 3;
+        placeKnob (toneRow.removeFromLeft (toneW), osc1PulseWidthSlider, osc1PulseWidthLabel);
+        placeKnob (toneRow.removeFromLeft (toneW), subLevelSlider, subLevelLabel);
+        placeKnob (toneRow, noiseMixSlider, noiseMixLabel);
+
+        wave.removeFromTop (4);
         osc1UnisonLabel.setBounds (wave.removeFromTop (16));
         const int uniW = wave.getWidth() / 4;
         placeKnob (wave.removeFromLeft (uniW), osc1UnisonVoicesSlider, osc1UnisonVoicesLabel);
@@ -1109,11 +1288,54 @@ void GuitarSynthAudioProcessorEditor::layoutSynthPage()
         auto panel = playPanelBounds.reduced (8);
         playSectionLabel.setBounds (panel.removeFromTop (20));
         panel.removeFromTop (4);
-        const int knobW = panel.getWidth() / 4;
-        placeKnob (panel.removeFromLeft (knobW), glideSlider, glideLabel);
-        placeKnob (panel.removeFromLeft (knobW), masterSlider, masterLabel);
-        placeKnob (panel.removeFromLeft (knobW), trackingSlider, trackingLabel);
-        placeKnob (panel, gateSlider, gateLabel);
+        auto topKnobs = panel.removeFromTop (panel.getHeight() / 2);
+        const int topW = topKnobs.getWidth() / 3;
+        placeKnob (topKnobs.removeFromLeft (topW), glideSlider, glideLabel);
+        placeKnob (topKnobs.removeFromLeft (topW), masterSlider, masterLabel);
+        placeKnob (topKnobs, trackingSlider, trackingLabel);
+        const int bottomW = panel.getWidth() / 2;
+        placeKnob (panel.removeFromLeft (bottomW), gateSlider, gateLabel);
+        placeKnob (panel, retriggerSlider, retriggerLabel);
+    }
+
+    bounds.removeFromTop (10);
+    arpPanelBounds = bounds.removeFromTop (juce::jlimit (110, 140, bounds.getHeight() * 28 / 100));
+    {
+        auto panel = arpPanelBounds.reduced (8);
+        auto titleRow = panel.removeFromTop (22);
+        arpSectionLabel.setBounds (titleRow.removeFromLeft (juce::jmax (40, titleRow.getWidth() - 180)));
+        arpLatchButton.setBounds (titleRow.removeFromRight (56).reduced (2, 1));
+        arpSyncButton.setBounds (titleRow.removeFromRight (56).reduced (2, 1));
+        arpEnableButton.setBounds (titleRow.removeFromRight (56).reduced (2, 1));
+
+        auto left = panel.removeFromLeft (juce::jmax (180, panel.getWidth() / 4));
+        const int knobW = left.getWidth() / 3;
+        placeKnob (left.removeFromLeft (knobW), arpRateSlider, arpRateLabel);
+        placeKnob (left.removeFromLeft (knobW), arpGateSlider, arpGateLabel);
+        placeKnob (left, arpOctavesSlider, arpOctavesLabel);
+
+        panel.removeFromLeft (8);
+        auto right = panel;
+        auto placeLabeledButtons = [] (juce::Rectangle<int>& area, juce::Label& label,
+                                       std::initializer_list<juce::TextButton*> buttons)
+        {
+            auto row = area.removeFromTop (26);
+            label.setBounds (row.removeFromLeft (40));
+            const int n = static_cast<int> (buttons.size());
+            const int bw = n > 0 ? row.getWidth() / n : row.getWidth();
+            for (auto* button : buttons)
+                button->setBounds (row.removeFromLeft (bw).reduced (1));
+            area.removeFromTop (4);
+        };
+
+        placeLabeledButtons (right, arpModeLabel,
+                             { &arpModeUpButton, &arpModeDownButton, &arpModeUpDownButton, &arpModeRandomButton });
+        placeLabeledButtons (right, arpChordLabel,
+                             { &arpChordNoteButton, &arpChordMajorButton, &arpChordMinorButton,
+                               &arpChordMaj7Button, &arpChordMin7Button, &arpChordSus2Button, &arpChordSus4Button });
+        placeLabeledButtons (right, arpDivisionLabel,
+                             { &arpDivQuarterButton, &arpDivEighthButton, &arpDivEighthTButton,
+                               &arpDivSixteenthButton, &arpDivSixteenthTButton, &arpDivThirtySecondButton });
     }
 
     bounds.removeFromTop (10);
@@ -1186,7 +1408,8 @@ void GuitarSynthAudioProcessorEditor::layoutLfoPage()
                                    juce::Slider& cutoff, juce::Label& cutoffLbl,
                                    juce::Slider& res, juce::Label& resLbl,
                                    juce::Slider& pitch, juce::Label& pitchLbl,
-                                   juce::Slider& amp, juce::Label& ampLbl)
+                                   juce::Slider& amp, juce::Label& ampLbl,
+                                   juce::Slider& pwm, juce::Label& pwmLbl)
     {
         auto panel = col.reduced (10);
         auto titleRow = panel.removeFromTop (26);
@@ -1209,9 +1432,10 @@ void GuitarSynthAudioProcessorEditor::layoutLfoPage()
         placeKnob (topKnobs, res, resLbl);
 
         panel.removeFromTop (8);
-        const int bottomW = panel.getWidth() / 2;
+        const int bottomW = panel.getWidth() / 3;
         placeKnob (panel.removeFromLeft (bottomW), pitch, pitchLbl);
-        placeKnob (panel, amp, ampLbl);
+        placeKnob (panel.removeFromLeft (bottomW), amp, ampLbl);
+        placeKnob (panel, pwm, pwmLbl);
     };
 
     layoutLfoColumn (lfo1PanelBounds, lfo1SectionLabel, lfo1EnableButton,
@@ -1220,7 +1444,8 @@ void GuitarSynthAudioProcessorEditor::layoutLfoPage()
                      lfo1FilterSlider, lfo1FilterLabel,
                      lfo1ResonanceSlider, lfo1ResonanceLabel,
                      lfo1PitchSlider, lfo1PitchLabel,
-                     lfo1AmpSlider, lfo1AmpLabel);
+                     lfo1AmpSlider, lfo1AmpLabel,
+                     lfo1PwmSlider, lfo1PwmLabel);
 
     layoutLfoColumn (lfo2PanelBounds, lfo2SectionLabel, lfo2EnableButton,
                      lfo2SineButton, lfo2TriButton, lfo2SquareButton, lfo2SawButton,
@@ -1228,7 +1453,8 @@ void GuitarSynthAudioProcessorEditor::layoutLfoPage()
                      lfo2FilterSlider, lfo2FilterLabel,
                      lfo2ResonanceSlider, lfo2ResonanceLabel,
                      lfo2PitchSlider, lfo2PitchLabel,
-                     lfo2AmpSlider, lfo2AmpLabel);
+                     lfo2AmpSlider, lfo2AmpLabel,
+                     lfo2PwmSlider, lfo2PwmLabel);
 }
 
 void GuitarSynthAudioProcessorEditor::layoutFilterEnvPage()
@@ -1283,9 +1509,23 @@ void GuitarSynthAudioProcessorEditor::layoutFxPage()
         return;
 
     const int gap = 12;
+    chorusPanelBounds = bounds.removeFromTop (120);
+    bounds.removeFromTop (gap);
     fxRackBounds = bounds.removeFromTop (110);
     bounds.removeFromTop (gap);
     fxDetailBounds = bounds;
+
+    {
+        auto panel = chorusPanelBounds.reduced (10);
+        auto titleRow = panel.removeFromTop (22);
+        chorusSectionLabel.setBounds (titleRow.removeFromLeft (titleRow.getWidth() - 56));
+        chorusEnableButton.setBounds (titleRow.reduced (2, 1));
+        panel.removeFromTop (4);
+        const int kw = panel.getWidth() / 3;
+        placeKnob (panel.removeFromLeft (kw), chorusRateSlider, chorusRateLabel);
+        placeKnob (panel.removeFromLeft (kw), chorusDepthSlider, chorusDepthLabel);
+        placeKnob (panel, chorusMixSlider, chorusMixLabel);
+    }
 
     if (fxRack != nullptr)
         fxRack->setBounds (fxRackBounds.reduced (10).withTrimmedTop (22));

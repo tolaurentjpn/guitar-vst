@@ -9,7 +9,8 @@ enum class WaveformType
 {
     sine = 0,
     saw,
-    square
+    square,
+    triangle
 };
 
 class SynthEngine
@@ -25,6 +26,11 @@ public:
     void setOsc2Mix (float mix);
     void setOsc2Octave (int octave);
     void setOsc2DetuneCents (float cents);
+
+    void setOsc1PulseWidth (float width01);
+    void setOsc2PulseWidth (float width01);
+    void setSubLevel (float level01);
+    void setNoiseMix (float mix01);
 
     void setOsc1UnisonVoices (int voices);
     void setOsc1UnisonDetune (float amount01);
@@ -75,6 +81,7 @@ public:
     void setLfo1ResonanceAmount (float amount);
     void setLfo1PitchAmount (float amount);
     void setLfo1AmpAmount (float amount);
+    void setLfo1PwmAmount (float amount);
 
     void setLfo2Enabled (bool enabled);
     void setLfo2Rate (float hz);
@@ -83,8 +90,11 @@ public:
     void setLfo2ResonanceAmount (float amount);
     void setLfo2PitchAmount (float amount);
     void setLfo2AmpAmount (float amount);
+    void setLfo2PwmAmount (float amount);
 
     void setPitchState (float hz, bool trackingActive);
+    /** Re-attack amp/filter envelopes and reset phases while a note is already sounding. */
+    void retrigger() noexcept;
     void muteImmediately() noexcept;
     bool isIdle() const noexcept;
     void processSample (float& left, float& right) noexcept;
@@ -111,23 +121,31 @@ private:
         void advance() noexcept;
     };
 
+    /** Phase in [0, 1); triState holds leaky-integrator memory for triangle. */
     struct PhaseOsc
     {
         float phase = 0.0f;
+        float triState = 0.0f;
     };
 
     void hardMute() noexcept;
     void renderSample (float osc1BaseFreq, float osc2BaseFreq,
                        float osc1AmpScale, float osc2AmpScale,
+                       float osc1Pulse, float osc2Pulse,
                        float& left, float& right) noexcept;
     void resetUnisonPhases (bool randomizeOsc1, bool randomizeOsc2);
     void resetOscStack (std::array<PhaseOsc, maxUnison>& stack, float phaseRandom01);
     float msToCoeff (float ms) const;
     float clampCutoff (float hz) const noexcept;
+    void updateNoiseFilterCoeff() noexcept;
     static float voiceDetuneCents (int voiceIndex, int numVoices, float maxDetuneCents) noexcept;
     static float voicePan (int voiceIndex, int numVoices, float spread01) noexcept;
     static float voiceBlendGain (int voiceIndex, int numVoices, float blend01) noexcept;
-    static float renderWave (WaveformType type, float phase) noexcept;
+    static float polyBlep (float t, float dt) noexcept;
+    static float renderSquareBlep (float phase01, float dt, float pulseWidth) noexcept;
+    static float renderWave (WaveformType type, float phase01, float dt,
+                             float pulseWidth, float& triState) noexcept;
+    static float modulatedPulseWidth (float baseWidth, float lfoAmount, float lfoValue) noexcept;
 
     double sampleRate = 44100.0;
     WaveformType waveform = WaveformType::saw;
@@ -149,6 +167,14 @@ private:
     float osc2Mix = 0.35f;
     int osc2Octave = 0;
     float osc2DetuneCents = 0.0f;
+
+    float osc1PulseWidth = 0.5f;
+    float osc2PulseWidth = 0.5f;
+    float subLevel = 0.0f;
+    float noiseMix = 0.0f;
+    float subPhase = 0.0f;
+    float noiseLpState = 0.0f;
+    float noiseLpCoeff = 0.0f;
 
     int osc1UnisonVoices = 1;
     float osc1UnisonDetune = 0.35f;
@@ -173,10 +199,12 @@ private:
     float lfo1ResonanceAmount = 0.0f;
     float lfo1PitchAmount = 0.0f;
     float lfo1AmpAmount = 0.0f;
+    float lfo1PwmAmount = 0.0f;
     float lfo2FilterAmount = 0.0f;
     float lfo2ResonanceAmount = 0.0f;
     float lfo2PitchAmount = 0.0f;
     float lfo2AmpAmount = 0.0f;
+    float lfo2PwmAmount = 0.0f;
 
     AmpEnvelope env1;
     AmpEnvelope env2;
@@ -189,4 +217,5 @@ private:
     bool activeVoiced = false;
 
     std::mt19937 rng { std::random_device{}() };
+    std::uniform_real_distribution<float> noiseDist { -1.0f, 1.0f };
 };
