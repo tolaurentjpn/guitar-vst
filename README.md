@@ -1,6 +1,8 @@
 # Guitar Synth
 
-Monophonic **guitar-to-synth** audio plugin for macOS. Pitch-tracks your guitar input in real time and drives a dual-oscillator subtractive synthesizer with unison, PWM, sub/noise, filter envelopes, a pro-style arpeggiator, a dedicated chorus, a reorderable FX rack, and factory presets (including cinematic Zimmer and Jupiter-8 characters).
+Monophonic **guitar-to-synth** audio plugin for macOS and PC. Pitch-tracks your guitar input in real time and drives a dual-oscillator subtractive synthesizer with unison, PWM, sub/noise, filter envelopes, a pro-style arpeggiator, a dedicated chorus, a reorderable FX rack, and factory presets (including cinematic Zimmer and Jupiter-8 characters).
+
+AU is macOS-only; VST3 + Standalone are built for both macOS and PC.
 
 ## Features
 
@@ -35,7 +37,7 @@ Typical end-to-end latency at 48 kHz with a 128-sample buffer:
 
 1. Use the **Standalone** app for live playing (no DAW overhead).
 2. Set audio buffer size to **64** or **128** samples in the Standalone audio settings.
-3. On first launch, macOS will ask for **Microphone** access — click **Allow**. If you previously denied it: **System Settings → Privacy & Security → Microphone → enable Guitar Synth**, or run `tccutil reset Microphone com.guitarsynth.plugin` and relaunch.
+3. On first launch (macOS), macOS will ask for **Microphone** access — click **Allow**. If you previously denied it: **System Settings → Privacy & Security → Microphone → enable Guitar Synth**, or run `tccutil reset Microphone com.guitarsynth.plugin` and relaunch.
 4. Enable the correct **input channels** for your guitar in Audio Settings (usually input 1 on your interface).
 5. Use **headphones** when monitoring through speakers to avoid feedback (Standalone enables live input by default).
 6. Disable direct monitoring on your audio interface if you hear a dry double.
@@ -43,20 +45,20 @@ Typical end-to-end latency at 48 kHz with a 128-sample buffer:
 8. Adjust **Gate** (default -48 dB) and **Tracking** knobs if notes fail to trigger, or if you hear synth output while idle. Raise Gate toward -40 dB if the gate opens on interface noise.
 9. Use **Retrigger** (default mid) so repeated picks of the same note re-attack the synth. Raise it if soft re-picks are missed; lower it (or set to 0 to disable) if you get double triggers from one pluck.
 
-Run the automated checks after building:
+Run the automated checks after building (macOS build profile):
 
 ```bash
-cmake --build build --target GuitarSynthTests
-ctest --test-dir build --output-on-failure
+cmake --build build-mac --target GuitarSynthTests GuitarSynthProcessorTests GuitarSynthPitchTrackerTests
+ctest --test-dir build-mac --output-on-failure
 ```
 
 The plugin reports latency to the host via `getLatencySamples()` so DAWs can compensate.
 
 ## Requirements
 
-- macOS 11+
-- Xcode Command Line Tools
 - CMake 3.22+
+- macOS 11+ (for AU + macOS Standalone)
+- PC toolchain (Windows: MSVC + Visual Studio Build Tools) for VST3 + Standalone
 
 Install tools if needed:
 
@@ -65,19 +67,44 @@ xcode-select --install
 brew install cmake
 ```
 
-## Build
+## Build on macOS
 
 ```bash
 cd "/Users/thomas/Documents/Data science/guitar_vst"
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j
+cmake -B build-mac -DCMAKE_BUILD_TYPE=Release
+cmake --build build-mac --config Release -j
 ```
 
-### Outputs
+### Outputs (macOS)
 
-- Standalone: `build/GuitarSynth_artefacts/Release/Standalone/Guitar Synth.app`
+- Standalone: `build-mac/GuitarSynth_artefacts/Release/Standalone/Guitar Synth.app`
 - VST3: `~/Library/Audio/Plug-Ins/VST3/Guitar Synth.vst3`
 - AU: `~/Library/Audio/Plug-Ins/Components/Guitar Synth.component`
+
+## Build for PC (Windows/Linux)
+
+```bash
+cd "/Users/thomas/Documents/Data science/guitar_vst"
+# Windows (example, x64):
+cmake -B build-pc -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake --build build-pc --config Release -j
+
+# Linux: use your normal CMake generator (e.g. Ninja/Make) without -G/-A
+```
+
+### Outputs (PC)
+
+- VST3 + Standalone: produced by the build and copied after build (see `COPY_PLUGIN_AFTER_BUILD TRUE` in `CMakeLists.txt`)
+- AU: not built on PC (AU is macOS-only)
+
+### Verification checklist
+
+- macOS:
+  - build `GuitarSynthTests`, `GuitarSynthProcessorTests`, and `GuitarSynthPitchTrackerTests`, then run `ctest --test-dir build-mac --output-on-failure`
+  - confirm artifacts exist for `AU`, `VST3`, and `Standalone`
+- PC: build `GuitarSynth` / `GuitarSynth_Standalone`
+  - confirm `VST3` + `Standalone` artifacts exist
+  - confirm no `AU` artifact is produced/installed
 
 ## Live setup
 

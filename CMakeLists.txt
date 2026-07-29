@@ -14,6 +14,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# Plugin formats:
+# - PC (Windows/Linux): VST3 + Standalone
+# - macOS: AU + VST3 + Standalone
+set(PLUGIN_FORMATS VST3 Standalone)
+if(APPLE)
+    list(APPEND PLUGIN_FORMATS AU)
+endif()
+
+# JUCE's microphone permission strings are relevant on Apple platforms.
+set(MICROPHONE_PERMISSION_ARGS)
+if(APPLE)
+    set(MICROPHONE_PERMISSION_ARGS
+        MICROPHONE_PERMISSION_ENABLED TRUE
+        MICROPHONE_PERMISSION_TEXT "Guitar Synth needs microphone access to track your guitar input.")
+endif()
+
 juce_add_plugin(GuitarSynth
     COMPANY_NAME "GuitarSynth"
     BUNDLE_ID com.guitarsynth.plugin
@@ -25,10 +41,10 @@ juce_add_plugin(GuitarSynth
     COPY_PLUGIN_AFTER_BUILD TRUE
     PLUGIN_MANUFACTURER_CODE GtSy
     PLUGIN_CODE GtS1
-    FORMATS AU VST3 Standalone
+    FORMATS ${PLUGIN_FORMATS}
     PRODUCT_NAME "Guitar Synth"
-    MICROPHONE_PERMISSION_ENABLED TRUE
-    MICROPHONE_PERMISSION_TEXT "Guitar Synth needs microphone access to track your guitar input.")
+    ${MICROPHONE_PERMISSION_ARGS}
+    )
 
 juce_add_binary_data(GuitarSynthAssets SOURCES
     Assets/panel_bg.png

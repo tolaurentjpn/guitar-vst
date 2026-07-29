@@ -1673,7 +1673,7 @@ void GuitarSynthAudioProcessorEditor::timerCallback()
     {
         inputLevelLabel.setText ("Input  no channels", juce::dontSendNotification);
         inputMeter->setLevel (0.0f);
-        inputHintLabel.setText ("Allow Microphone in System Settings, then restart",
+        inputHintLabel.setText ("Allow Microphone permission in your OS settings, then restart",
                                 juce::dontSendNotification);
     }
     else
