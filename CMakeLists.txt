@@ -30,14 +30,41 @@ juce_add_plugin(GuitarSynth
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "Guitar Synth needs microphone access to track your guitar input.")
 
+juce_add_binary_data(GuitarSynthAssets SOURCES
+    Assets/panel_bg.png
+    Assets/knob_base.png
+    Assets/knob_pointer.png
+    Assets/btn_sine.png
+    Assets/btn_sine_on.png
+    Assets/btn_saw.png
+    Assets/btn_saw_on.png
+    Assets/btn_square.png
+    Assets/btn_square_on.png
+    Assets/btn_triangle.png
+    Assets/btn_triangle_on.png
+    Assets/led_on.png
+    Assets/led_off.png)
+
 target_sources(GuitarSynth
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PitchTracker.cpp
+        Source/OctaveNet.cpp
         Source/EnvelopeFollower.cpp
         Source/SynthEngine.cpp
-        Source/LookAndFeel.cpp)
+        Source/Lfo.cpp
+        Source/LookAndFeel.cpp
+        Source/AdsrPlotEditor.cpp
+        Source/PresetBank.cpp
+        Source/DistortionEffect.cpp
+        Source/CompressorEffect.cpp
+        Source/DelayEffect.cpp
+        Source/ReverbEffect.cpp
+        Source/ChorusEffect.cpp
+        Source/Arpeggiator.cpp
+        Source/EffectChain.cpp
+        Source/FxRackComponent.cpp)
 
 target_compile_definitions(GuitarSynth
     PUBLIC
@@ -48,6 +75,7 @@ target_compile_definitions(GuitarSynth
 
 target_link_libraries(GuitarSynth
     PRIVATE
+        GuitarSynthAssets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -94,6 +122,7 @@ target_compile_definitions(GuitarSynthProcessorTests PRIVATE
     JUCE_DISPLAY_SPLASH_SCREEN=0)
 target_link_libraries(GuitarSynthProcessorTests PRIVATE
     GuitarSynth
+    GuitarSynthAssets
     juce::juce_audio_utils
     juce::juce_dsp
     juce::juce_recommended_config_flags
@@ -118,6 +147,7 @@ target_compile_definitions(GuitarSynthPitchTrackerTests PRIVATE
     JUCE_DISPLAY_SPLASH_SCREEN=0)
 target_link_libraries(GuitarSynthPitchTrackerTests PRIVATE
     GuitarSynth
+    GuitarSynthAssets
     juce::juce_dsp
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)

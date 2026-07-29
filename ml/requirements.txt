@@ -1,0 +1,2 @@
+# Optional ML training deps for regenerating OctaveNetWeights.h
+numpy>=1.24
